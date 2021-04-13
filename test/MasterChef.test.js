@@ -133,9 +133,17 @@ contract('MasterChef', ([alice, bob, carol, dev, minter]) => {
     })
 
     it('genRandomNFT', async () => {
-        let id = await this.chef.mintRandomNFT({ from: minter });
-        let info = await this.chef.getNFTInfo(id).toString();
-        //console.log(info);
+        await this.chef.add('1000', this.lp1.address,true, true, { from: minter });
+      await this.chef.add('1000', this.lp2.address, true,true, { from: minter });
+      await this.chef.add('1000', this.lp3.address,true, true, { from: minter });
+
+
+        await this.chef.mintRandomNFT(alice, { from: minter });
+        await this.chef.mintRandomNFT(alice, { from: minter });
+        await this.chef.mintRandomNFT(alice, { from: minter });
+        await this.chef.mintRandomNFT(alice, { from: minter });
+        await this.chef.mintRandomNFT(alice, { from: minter });
+       // let info = await this.chef.getNFTInfo(id).toString();
     })
 
 });

@@ -71,7 +71,7 @@ contract MasterChef is Ownable {
         uint256 totalWeightedValue;
     }
 
-    // attr = type(32) | value <<32 
+    // attr = type(32) | value <<32
     struct EquipmentDetail {
         uint256 level; // level requirement
         bool isRandom;
@@ -106,7 +106,6 @@ contract MasterChef is Ownable {
     // The block number when CAKE mining starts.
     uint256 public startBlock;
 
-
     uint256 public NFT_BASE_DROP_RATE_INC = 2;
     uint256 public NFT_BASE_DROP_RATE_BASE = 1000000;
     uint256 public NFT_DROP_RATE_CAP = 20000;
@@ -119,6 +118,9 @@ contract MasterChef is Ownable {
         uint256 indexed pid,
         uint256 amount
     );
+
+    event MintNFT(address indexed user, uint256 indexed tokenid);
+    event GenNFTAttr(uint256 attr);
 
     constructor(
         PPXToken _ppx,
@@ -143,15 +145,21 @@ contract MasterChef is Ownable {
         BONUS_MULTIPLIER = multiplierNumber;
     }
 
-    function updateNFTDropRate(uint256 base, uint256 inc, uint256 cap) public onlyOwner {
+    function updateNFTDropRate(
+        uint256 base,
+        uint256 inc,
+        uint256 cap
+    ) public onlyOwner {
         NFT_BASE_DROP_RATE_INC = inc;
         NFT_BASE_DROP_RATE_BASE = base;
         NFT_DROP_RATE_CAP = cap;
     }
 
-    function getNFTDropRate(uint256 _pid) public view returns(uint256) {
+    function getNFTDropRate(uint256 _pid) public view returns (uint256) {
         if (block.number > userInfo[_pid][msg.sender].lastDropBlock) {
-            uint256 rate = (block.number - userInfo[_pid][msg.sender].lastDropBlock) * NFT_BASE_DROP_RATE_INC;
+            uint256 rate =
+                (block.number - userInfo[_pid][msg.sender].lastDropBlock) *
+                    NFT_BASE_DROP_RATE_INC;
             if (rate > NFT_DROP_RATE_CAP) {
                 rate = NFT_DROP_RATE_CAP;
             }
@@ -161,82 +169,101 @@ contract MasterChef is Ownable {
     }
 
     // The lagest danger of this random method is a miner may reject certain result.
-    // Since we can always have another nft drop test several hours later, 
+    // Since we can always have another nft drop test several hours later,
     // this rejection will not worth the cost of rejecting a block.
-    function randomForNFT() private view returns(uint256){
-        return uint256(keccak256(abi.encodePacked(block.difficulty, block.timestamp, msg.sender)));
+    function randomForNFT(uint256 seed) private view returns (uint256) {
+        if (seed == 0) {
+            return
+                uint256(
+                    keccak256(
+                        abi.encodePacked(
+                            block.difficulty,
+                            block.timestamp,
+                            msg.sender
+                        )
+                    )
+                );
+        }
+        return uint256(keccak256(abi.encodePacked(seed)));
     }
 
-    function mintRandomNFT() public onlyOwner returns(uint256) {
-        return genRandomNFT(randomForNFT());
+    function mintRandomNFT(address recv) public onlyOwner returns (uint256) {
+        return genRandomNFT(recv, randomForNFT(0));
     }
 
-    function mintNFT(uint256 _level, uint256[6] calldata _attr) public onlyOwner returns(uint256) {
-        uint256 newToken = ppe.mintNft(msg.sender);
+    function mintNFT(
+        address recv,
+        uint256 _level,
+        uint256[6] calldata _attr
+    ) public onlyOwner returns (uint256) {
+        uint256 newToken = ppe.mintNft(recv);
         EquipmentDetail storage detail = equipmentDetails[newToken];
         detail.isRandom = false;
 
         detail.level = _level;
-        for (uint i=0; i < 6; i += 1) {
+        for (uint256 i = 0; i < 6; i += 1) {
             detail.attr[i] = _attr[i];
         }
     }
 
-    function genAttr(uint256 r, uint256 level) internal returns (uint256) {
-        uint256 r1 = r%(2**8);
-        r >>= 8;
-        uint256 attr = r1%6 + 1;
+    function genAttr(
+        uint256 r,
+        uint256 level,
+        uint256 poolSize
+    ) internal returns (uint256) {
+        uint256 r1 = randomForNFT(r);
+        uint256 attr = (r1 % 6) + 1;
+        r1 = randomForNFT(r1);
 
-
-            r1 = r%(2**8);
-            r >>= 8;
-            uint256 attr_v = r1%level + 1;
-
-            if (attr == 4 || attr == 5 || attr == 6) {
-                r1 = r%(2**8);
-                r >>= 8;
-                attr = (r1 % poolInfo.length) << 32 | attr_v << 64 | attr;
+        uint256 attr_v = (r1 % level) + 1;
+        r1 = randomForNFT(r1);
+        if (attr == 4 || attr == 5 || attr == 6) {
+            if (poolSize == 0) {
+                attr = (attr-3) | (attr_v << 32);
             }
             else {
-                attr = attr | (attr_v << 32);
+                attr = ((r1 % poolSize) << 32) | (attr_v << 64) | attr;
             }
-            return attr;
+            
+        } else {
+            attr = attr | (attr_v << 32);
+        }
+        emit GenNFTAttr(attr);
+        return attr;
     }
-    function genRandomNFT(uint256 r) internal returns (uint256) {
-        uint256 newToken = ppe.mintNft(msg.sender);
+
+    function genRandomNFT(address recv, uint256 r) internal returns (uint256) {
+        uint256 newToken = ppe.mintNft(recv);
         EquipmentDetail storage detail = equipmentDetails[newToken];
         detail.isRandom = true;
 
-        uint256 r1 = r%(2**16);
-        r >>= 16;
-        // 208 random bit left
-        uint256 level = r1 % 20 + (NFT_MAX_LEVEL.sub(10));
-        level = level - level%5 + 5;
+        emit MintNFT(recv, newToken);
+
+        uint256 r1 = randomForNFT(r);
+
+        uint256 level = (r1 % 20) + (NFT_MAX_LEVEL.sub(10));
+        level = level - (level % 5) + 5;
         detail.level = level;
-
+        
         for (uint256 i = 0; i < 6; i++) {    
-            detail.attr[i] = genAttr(r, level);
-            r>>= 24;
-
-            if (r%(2**8) >= 2) {
+            detail.attr[i] = genAttr(r1, level, poolInfo.length);
+            r1 = randomForNFT(r1);
+            if (r1%256 >= 2) {
                 break;
             }
-            r>>= 8;
         }
-        return newToken;      
-
+        
+        return newToken;
     }
 
     function checkNFTDrop(uint256 _pid) internal {
         uint256 rate = getNFTDropRate(_pid);
-        userInfo[_pid][msg.sender].lastDropBlock =  block.number;
+        userInfo[_pid][msg.sender].lastDropBlock = block.number;
 
-        uint256 r = randomForNFT();
-        uint256 r1 = r%(2**32);
-        r >>= 32;
+        uint256 r = randomForNFT(0);
 
-        if (r1 % NFT_BASE_DROP_RATE_BASE < rate) {
-            genRandomNFT(r);
+        if (r % NFT_BASE_DROP_RATE_BASE < rate) {
+            genRandomNFT(msg.sender, r);
         }
         return;
     }
@@ -472,7 +499,6 @@ contract MasterChef is Ownable {
         // NFT
         checkNFTDrop(_pid);
 
-
         emit Withdraw(msg.sender, _pid, _amount);
     }
 
@@ -534,43 +560,58 @@ contract MasterChef is Ownable {
         return false;
     }
 
-    function levelToBonus(uint256 level) internal view returns (uint256) {
+    function levelToBonus(uint256 level) internal pure returns (uint256) {
         return level;
     }
 
-    function getPPXBonus(uint256 attr, uint256 _pid) internal view returns (uint256){
+    function getPPXBonus(uint256 attr, uint256 _pid)
+        internal
+        pure
+        returns (uint256)
+    {
         uint256 attr_type = attr % (2**32);
 
-        if (attr_type == 1) { // global ppx bonus
+        if (attr_type == 1) {
+            // global ppx bonus
             return (attr_type >> 32);
-        }
-        else if (attr_type == 4) { // ppx bonus on specific pool
+        } else if (attr_type == 4) {
+            // ppx bonus on specific pool
             return (attr_type >> 32) == _pid ? (attr_type >> 64) : 0;
         }
 
         return 0;
     }
 
-    function getPPYBonus(uint256 attr, uint256 _pid) internal view returns (uint256){
+    function getPPYBonus(uint256 attr, uint256 _pid)
+        internal
+        pure
+        returns (uint256)
+    {
         uint256 attr_type = attr % (2**32);
 
-        if (attr_type == 2) { // global ppy bonus
+        if (attr_type == 2) {
+            // global ppy bonus
             return (attr_type >> 32);
-        }
-        else if (attr_type == 5) { // ppy bonus on specific pool
+        } else if (attr_type == 5) {
+            // ppy bonus on specific pool
             return (attr_type >> 32) == _pid ? (attr_type >> 64) : 0;
         }
 
         return 0;
     }
 
-    function getMFBonus(uint256 attr, uint256 _pid) internal view returns (uint256){
+    function getMFBonus(uint256 attr, uint256 _pid)
+        internal
+        pure
+        returns (uint256)
+    {
         uint256 attr_type = attr % (2**32);
 
-        if (attr_type == 3) { // global mf bonus
+        if (attr_type == 3) {
+            // global mf bonus
             return (attr_type >> 32);
-        }
-        else if (attr_type == 6) { // mf bonus on specific pool
+        } else if (attr_type == 6) {
+            // mf bonus on specific pool
             return (attr_type >> 32) == _pid ? (attr_type >> 64) : 0;
         }
         return 0;
@@ -596,28 +637,33 @@ contract MasterChef is Ownable {
                     equipmentDetails[nft].level <= userProfileInfo[_user].level
                 ) {
                     if (isPPX) {
-                            for (uint256 j = 0; j < 6;j++) {
-                                if (equipmentDetails[nft].attr[j] == 0) {
-                                    break;
-                                }
-                                equipBonus = equipBonus
-                                .mul(getPPXBonus(equipmentDetails[nft].attr[j], _pid).add(100))
-                                .div(100);    
-                            }
-                        }
-                    } else {
                         for (uint256 j = 0; j < 6; j++) {
-                                if (equipmentDetails[nft].attr[j] == 0) {
-                                    break;
-                                }
-                                equipBonus = equipBonus
-                                .mul(getPPYBonus(equipmentDetails[nft].attr[j], _pid).add(100))
-                                .div(100);    
+                            if (equipmentDetails[nft].attr[j] == 0) {
+                                break;
                             }
+                            equipBonus = equipBonus
+                                .mul(
+                                getPPXBonus(equipmentDetails[nft].attr[j], _pid)
+                                    .add(100)
+                            )
+                                .div(100);
+                        }
+                    }
+                } else {
+                    for (uint256 j = 0; j < 6; j++) {
+                        if (equipmentDetails[nft].attr[j] == 0) {
+                            break;
+                        }
+                        equipBonus = equipBonus
+                            .mul(
+                            getPPYBonus(equipmentDetails[nft].attr[j], _pid)
+                                .add(100)
+                        )
+                            .div(100);
                     }
                 }
             }
-
+        }
 
         return levelBonus.mul(equipBonus).div(100).sub(100);
     }
@@ -645,16 +691,19 @@ contract MasterChef is Ownable {
         return userProfileInfo[_user].level;
     }
 
-    function getEquip(address _user) public view returns ( uint256[6] memory) {
+    function getEquip(address _user) public view returns (uint256[6] memory) {
         return userProfileInfo[_user].equipSlot;
     }
 
     function getSlotNum(address _user) public view returns (uint256) {
         return userProfileInfo[_user].slotNum;
-
     }
 
-    function getNFTInfo(uint256 _tokenId) public view returns ( EquipmentDetail memory) {
+    function getNFTInfo(uint256 _tokenId)
+        public
+        view
+        returns (EquipmentDetail memory)
+    {
         return equipmentDetails[_tokenId];
     }
 }
