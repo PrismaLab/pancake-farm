@@ -3,10 +3,8 @@ pragma solidity 0.8.0;
 
 import "./libs/BEP20.sol";
 
-import "./CakeToken.sol";
-
-// SyrupBar with Governance.
-contract SyrupBar is BEP20('SyrupBar Token', 'SYRUP') {
+// PPXToken with Governance.
+contract PPXToken is BEP20('PPX Token', 'PPX') {
     /// @notice Creates `_amount` token to `_to`. Must only be called by the owner (MasterChef).
     function mint(address _to, uint256 _amount) public onlyOwner {
         _mint(_to, _amount);
@@ -18,25 +16,6 @@ contract SyrupBar is BEP20('SyrupBar Token', 'SYRUP') {
         _moveDelegates(_delegates[_from], address(0), _amount);
     }
 
-    // The CAKE TOKEN!
-    CakeToken public cake;
-
-
-    constructor(
-        CakeToken _cake
-    ) public {
-        cake = _cake;
-    }
-
-    // Safe cake transfer function, just in case if rounding error causes pool to not have enough CAKEs.
-    function safeCakeTransfer(address _to, uint256 _amount) public onlyOwner {
-        uint256 cakeBal = cake.balanceOf(address(this));
-        if (_amount > cakeBal) {
-            cake.transfer(_to, cakeBal);
-        } else {
-            cake.transfer(_to, _amount);
-        }
-    }
 
     // Copied and modified from YAM code:
     // https://github.com/yam-finance/yam-protocol/blob/master/contracts/token/YAMGovernanceStorage.sol
@@ -140,9 +119,9 @@ contract SyrupBar is BEP20('SyrupBar Token', 'SYRUP') {
         );
 
         address signatory = ecrecover(digest, v, r, s);
-        require(signatory != address(0), "CAKE::delegateBySig: invalid signature");
-        require(nonce == nonces[signatory]++, "CAKE::delegateBySig: invalid nonce");
-        require(block.timestamp <= expiry, "CAKE::delegateBySig: signature expired");
+        require(signatory != address(0), "PPX::delegateBySig: invalid signature");
+        require(nonce == nonces[signatory]++, "PPX::delegateBySig: invalid nonce");
+        require(block.timestamp <= expiry, "PPX::delegateBySig: signature expired");
         return _delegate(signatory, delegatee);
     }
 
@@ -172,7 +151,7 @@ contract SyrupBar is BEP20('SyrupBar Token', 'SYRUP') {
         view
         returns (uint256)
     {
-        require(blockNumber < block.number, "CAKE::getPriorVotes: not yet determined");
+        require(blockNumber < block.number, "PPX::getPriorVotes: not yet determined");
 
         uint32 nCheckpoints = numCheckpoints[account];
         if (nCheckpoints == 0) {
@@ -209,7 +188,7 @@ contract SyrupBar is BEP20('SyrupBar Token', 'SYRUP') {
         internal
     {
         address currentDelegate = _delegates[delegator];
-        uint256 delegatorBalance = balanceOf(delegator); // balance of underlying CAKEs (not scaled);
+        uint256 delegatorBalance = balanceOf(delegator); // balance of underlying PPXs (not scaled);
         _delegates[delegator] = delegatee;
 
         emit DelegateChanged(delegator, currentDelegate, delegatee);
@@ -245,7 +224,7 @@ contract SyrupBar is BEP20('SyrupBar Token', 'SYRUP') {
     )
         internal
     {
-        uint32 blockNumber = safe32(block.number, "CAKE::_writeCheckpoint: block number exceeds 32 bits");
+        uint32 blockNumber = safe32(block.number, "PPX::_writeCheckpoint: block number exceeds 32 bits");
 
         if (nCheckpoints > 0 && checkpoints[delegatee][nCheckpoints - 1].fromBlock == blockNumber) {
             checkpoints[delegatee][nCheckpoints - 1].votes = newVotes;

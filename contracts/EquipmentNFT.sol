@@ -21,4 +21,9 @@ contract EquipmentNFT is ERC721, Ownable {
 
         return newNftTokenId;
     }
+
+    function checkOwner(uint256 _tokenId, address _user) public view returns (bool) {
+        return (ownerOf(_tokenId) == _user);
+    }
+
 }

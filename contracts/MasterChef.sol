@@ -1,13 +1,14 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.0;
 
-import '@openzeppelin/contracts/utils/math/SafeMath.sol';
-import './libs/IBEP20.sol';
-import './libs/SafeBEP20.sol';
-import '@openzeppelin/contracts/access/Ownable.sol';
+import "@openzeppelin/contracts/utils/math/SafeMath.sol";
+import "./libs/IBEP20.sol";
+import "./libs/SafeBEP20.sol";
+import "@openzeppelin/contracts/access/Ownable.sol";
 
-import "./CakeToken.sol";
-import "./SyrupBar.sol";
+import "./PPXToken.sol";
+import "./PPYToken.sol";
+import "./EquipmentNFT.sol";
 
 // import "@nomiclabs/buidler/console.sol";
 
@@ -37,9 +38,10 @@ contract MasterChef is Ownable {
 
     // Info of each user.
     struct UserInfo {
-        uint256 amount;     // How many LP tokens the user has provided.
-        uint256 weight;     // How many weighted LP tokens the user has provided.
+        uint256 amount; // How many LP tokens the user has provided.
+        uint256 weight; // How many weighted LP tokens the user has provided.
         uint256 rewardDebt; // Reward debt. See explanation below.
+        uint256 lastDropBlock;
         //
         // We do some fancy math here. Basically, any point in time, the amount of CAKEs
         // entitled to a user but is pending to be distributed is:
@@ -54,39 +56,36 @@ contract MasterChef is Ownable {
     }
 
     struct UserProfileInfo {
-        uint256 level;      // level
-        uint256 equip;      // equipment slot
+        uint256 level; // level
+        uint256[6] equipSlot; // equipment slot
+        uint256 slotNum;
     }
 
     // Info of each pool.
     struct PoolInfo {
-        IBEP20 lpToken;           // Address of LP token contract.
-        uint256 allocPoint;       // How many allocation points assigned to this pool. CAKEs to distribute per block.
-        uint256 lastRewardBlock;  // Last block number that CAKEs distribution occurs.
+        IBEP20 lpToken; // Address of LP token contract.
+        bool isPPX; // Address of reward token contract.
+        uint256 allocPoint; // How many allocation points assigned to this pool. CAKEs to distribute per block.
+        uint256 lastRewardBlock; // Last block number that CAKEs distribution occurs.
         uint256 accCakePerShare; // Accumulated CAKEs per share, times 1e12. See below.
         uint256 totalWeightedValue;
     }
 
+    // attr = type(32) | value <<32 
     struct EquipmentDetail {
-        uint256 level;      // level requirement
-        uint256 ppx;      // ppx bonus
-        uint256 ppy;      // ppy bonus
-        uint256 mf;      // mf bonus
-        uint256 ppxsp;      // equipment slot
-        uint256 ppxspvalue;      // equipment slot
-        uint256 ppysp;      // equipment slot
-        uint256 ppyspvalue;      // equipment slot
-        uint256 mfsp;      // equipment slot
-        uint256 mfspvalue;      // equipment slot
+        uint256 level; // level requirement
+        bool isRandom;
+        uint256[6] attr;
     }
 
-    mapping (uint256 => EquipmentDetail) public equipmentDetails;
+    mapping(uint256 => EquipmentDetail) public equipmentDetails;
 
-
-    // The CAKE TOKEN!
-    CakeToken public cake;
-    // The SYRUP TOKEN!
-    SyrupBar public syrup;
+    // The PPX TOKEN!
+    PPXToken public ppx;
+    // The PPY TOKEN!
+    PPYToken public ppy;
+    // The PPE TOKEN!
+    EquipmentNFT public ppe;
     // Dev address.
     address public devaddr;
     // CAKE tokens created per block.
@@ -99,37 +98,147 @@ contract MasterChef is Ownable {
     // Info of each pool.
     PoolInfo[] public poolInfo;
     // Info of each user that stakes LP tokens.
-    mapping (address => UserProfileInfo) public userProfileInfo;
-    mapping (uint256 => mapping (address => UserInfo)) public userInfo;
+    mapping(address => UserProfileInfo) public userProfileInfo;
+    mapping(uint256 => mapping(address => UserInfo)) public userInfo;
     // Total allocation points. Must be the sum of all allocation points in all pools.
-    uint256 public totalAllocPoint = 0;
+    uint256 public totalAllocPointPPX = 0;
+    uint256 public totalAllocPointPPY = 0;
     // The block number when CAKE mining starts.
     uint256 public startBlock;
 
+
+    uint256 public NFT_BASE_DROP_RATE_INC = 2;
+    uint256 public NFT_BASE_DROP_RATE_BASE = 1000000;
+    uint256 public NFT_DROP_RATE_CAP = 20000;
+    uint256 public NFT_MAX_LEVEL = 20;
+
     event Deposit(address indexed user, uint256 indexed pid, uint256 amount);
     event Withdraw(address indexed user, uint256 indexed pid, uint256 amount);
-    event EmergencyWithdraw(address indexed user, uint256 indexed pid, uint256 amount);
+    event EmergencyWithdraw(
+        address indexed user,
+        uint256 indexed pid,
+        uint256 amount
+    );
 
     constructor(
-        CakeToken _cake,
-        SyrupBar _syrup,
+        PPXToken _ppx,
+        PPYToken _ppy,
+        EquipmentNFT _ppe,
         address _devaddr,
         uint256 _cakePerBlock,
         uint256 _startBlock
     ) public {
-        cake = _cake;
-        syrup = _syrup;
+        ppx = _ppx;
+        ppy = _ppy;
+        ppe = _ppe;
         devaddr = _devaddr;
         cakePerBlock = _cakePerBlock;
         startBlock = _startBlock;
 
-
-        totalAllocPoint = 0;
-
+        totalAllocPointPPX = 0;
+        totalAllocPointPPY = 0;
     }
 
     function updateMultiplier(uint256 multiplierNumber) public onlyOwner {
         BONUS_MULTIPLIER = multiplierNumber;
+    }
+
+    function updateNFTDropRate(uint256 base, uint256 inc, uint256 cap) public onlyOwner {
+        NFT_BASE_DROP_RATE_INC = inc;
+        NFT_BASE_DROP_RATE_BASE = base;
+        NFT_DROP_RATE_CAP = cap;
+    }
+
+    function getNFTDropRate(uint256 _pid) public view returns(uint256) {
+        if (block.number > userInfo[_pid][msg.sender].lastDropBlock) {
+            uint256 rate = (block.number - userInfo[_pid][msg.sender].lastDropBlock) * NFT_BASE_DROP_RATE_INC;
+            if (rate > NFT_DROP_RATE_CAP) {
+                rate = NFT_DROP_RATE_CAP;
+            }
+            return rate;
+        }
+        return 0;
+    }
+
+    // The lagest danger of this random method is a miner may reject certain result.
+    // Since we can always have another nft drop test several hours later, 
+    // this rejection will not worth the cost of rejecting a block.
+    function randomForNFT() private view returns(uint256){
+        return uint256(keccak256(abi.encodePacked(block.difficulty, block.timestamp, msg.sender)));
+    }
+
+    function mintRandomNFT() public onlyOwner returns(uint256) {
+        return genRandomNFT(randomForNFT());
+    }
+
+    function mintNFT(uint256 _level, uint256[6] calldata _attr) public onlyOwner returns(uint256) {
+        uint256 newToken = ppe.mintNft(msg.sender);
+        EquipmentDetail storage detail = equipmentDetails[newToken];
+        detail.isRandom = false;
+
+        detail.level = _level;
+        for (uint i=0; i < 6; i += 1) {
+            detail.attr[i] = _attr[i];
+        }
+    }
+
+    function genAttr(uint256 r, uint256 level) internal returns (uint256) {
+        uint256 r1 = r%(2**8);
+        r >>= 8;
+        uint256 attr = r1%6 + 1;
+
+
+            r1 = r%(2**8);
+            r >>= 8;
+            uint256 attr_v = r1%level + 1;
+
+            if (attr == 4 || attr == 5 || attr == 6) {
+                r1 = r%(2**8);
+                r >>= 8;
+                attr = (r1 % poolInfo.length) << 32 | attr_v << 64 | attr;
+            }
+            else {
+                attr = attr | (attr_v << 32);
+            }
+            return attr;
+    }
+    function genRandomNFT(uint256 r) internal returns (uint256) {
+        uint256 newToken = ppe.mintNft(msg.sender);
+        EquipmentDetail storage detail = equipmentDetails[newToken];
+        detail.isRandom = true;
+
+        uint256 r1 = r%(2**16);
+        r >>= 16;
+        // 208 random bit left
+        uint256 level = r1 % 20 + (NFT_MAX_LEVEL.sub(10));
+        level = level - level%5 + 5;
+        detail.level = level;
+
+        for (uint256 i = 0; i < 6; i++) {    
+            detail.attr[i] = genAttr(r, level);
+            r>>= 24;
+
+            if (r%(2**8) >= 2) {
+                break;
+            }
+            r>>= 8;
+        }
+        return newToken;      
+
+    }
+
+    function checkNFTDrop(uint256 _pid) internal {
+        uint256 rate = getNFTDropRate(_pid);
+        userInfo[_pid][msg.sender].lastDropBlock =  block.number;
+
+        uint256 r = randomForNFT();
+        uint256 r1 = r%(2**32);
+        r >>= 32;
+
+        if (r1 % NFT_BASE_DROP_RATE_BASE < rate) {
+            genRandomNFT(r);
+        }
+        return;
     }
 
     function poolLength() external view returns (uint256) {
@@ -138,45 +247,52 @@ contract MasterChef is Ownable {
 
     // Add a new lp to the pool. Can only be called by the owner.
     // XXX DO NOT add the same LP token more than once. Rewards will be messed up if you do.
-    function add(uint256 _allocPoint, IBEP20 _lpToken, bool _withUpdate) public onlyOwner {
+    function add(
+        uint256 _allocPoint,
+        IBEP20 _lpToken,
+        bool _isPPX,
+        bool _withUpdate
+    ) public onlyOwner {
         if (_withUpdate) {
             massUpdatePools();
         }
-        uint256 lastRewardBlock = block.number > startBlock ? block.number : startBlock;
-        totalAllocPoint = totalAllocPoint.add(_allocPoint);
-        poolInfo.push(PoolInfo({
-            lpToken: _lpToken,
-            allocPoint: _allocPoint,
-            lastRewardBlock: lastRewardBlock,
-            accCakePerShare: 0,
-            totalWeightedValue: 0
-        }));
-        updateStakingPool();
+        uint256 lastRewardBlock =
+            block.number > startBlock ? block.number : startBlock;
+        totalAllocPointPPX = totalAllocPointPPX.add(_allocPoint);
+        poolInfo.push(
+            PoolInfo({
+                lpToken: _lpToken,
+                isPPX: _isPPX,
+                allocPoint: _allocPoint,
+                lastRewardBlock: lastRewardBlock,
+                accCakePerShare: 0,
+                totalWeightedValue: 0
+            })
+        );
     }
 
     // Update the given pool's CAKE allocation point. Can only be called by the owner.
-    function set(uint256 _pid, uint256 _allocPoint, bool _withUpdate) public onlyOwner {
+    function set(
+        uint256 _pid,
+        uint256 _allocPoint,
+        bool _withUpdate
+    ) public onlyOwner {
         if (_withUpdate) {
             massUpdatePools();
         }
         uint256 prevAllocPoint = poolInfo[_pid].allocPoint;
         poolInfo[_pid].allocPoint = _allocPoint;
-        if (prevAllocPoint != _allocPoint) {
-            totalAllocPoint = totalAllocPoint.sub(prevAllocPoint).add(_allocPoint);
-            updateStakingPool();
-        }
-    }
 
-    function updateStakingPool() internal {
-        uint256 length = poolInfo.length;
-        uint256 points = 0;
-        for (uint256 pid = 1; pid < length; ++pid) {
-            points = points.add(poolInfo[pid].allocPoint);
-        }
-        if (points != 0) {
-            points = points.div(3);
-            totalAllocPoint = totalAllocPoint.sub(poolInfo[0].allocPoint).add(points);
-            poolInfo[0].allocPoint = points;
+        if (prevAllocPoint != _allocPoint) {
+            if (poolInfo[_pid].isPPX) {
+                totalAllocPointPPX = totalAllocPointPPX.sub(prevAllocPoint).add(
+                    _allocPoint
+                );
+            } else {
+                totalAllocPointPPY = totalAllocPointPPY.sub(prevAllocPoint).add(
+                    _allocPoint
+                );
+            }
         }
     }
 
@@ -198,21 +314,41 @@ contract MasterChef is Ownable {
     }
 
     // Return reward multiplier over the given _from to _to block.
-    function getMultiplier(uint256 _from, uint256 _to) public view returns (uint256) {
+    function getMultiplier(uint256 _from, uint256 _to)
+        public
+        view
+        returns (uint256)
+    {
         return _to.sub(_from).mul(BONUS_MULTIPLIER);
     }
 
     // View function to see pending CAKEs on frontend.
-    function pendingCake(uint256 _pid, address _user) external view returns (uint256) {
+    function pendingCake(uint256 _pid, address _user)
+        external
+        view
+        returns (uint256)
+    {
         PoolInfo storage pool = poolInfo[_pid];
         UserInfo storage user = userInfo[_pid][_user];
         uint256 accCakePerShare = pool.accCakePerShare;
         // uint256 lpSupply = pool.lpToken.balanceOf(address(this));
         uint256 lpSupply = pool.totalWeightedValue;
+        uint256 totalAllocPoint = 0;
+        if (poolInfo[_pid].isPPX) {
+            totalAllocPoint = totalAllocPointPPX;
+        } else {
+            totalAllocPoint = totalAllocPointPPY;
+        }
         if (block.number > pool.lastRewardBlock && lpSupply != 0) {
-            uint256 multiplier = getMultiplier(pool.lastRewardBlock, block.number);
-            uint256 cakeReward = multiplier.mul(cakePerBlock).mul(pool.allocPoint).div(totalAllocPoint);
-            accCakePerShare = accCakePerShare.add(cakeReward.mul(1e12).div(lpSupply));
+            uint256 multiplier =
+                getMultiplier(pool.lastRewardBlock, block.number);
+            uint256 cakeReward =
+                multiplier.mul(cakePerBlock).mul(pool.allocPoint).div(
+                    totalAllocPoint
+                );
+            accCakePerShare = accCakePerShare.add(
+                cakeReward.mul(1e12).div(lpSupply)
+            );
         }
         return user.amount.mul(accCakePerShare).div(1e12).sub(user.rewardDebt);
     }
@@ -224,7 +360,6 @@ contract MasterChef is Ownable {
             updatePool(pid);
         }
     }
-
 
     // Update reward variables of the given pool to be up-to-date.
     function updatePool(uint256 _pid) public {
@@ -238,65 +373,106 @@ contract MasterChef is Ownable {
             pool.lastRewardBlock = block.number;
             return;
         }
+        uint256 totalAllocPoint = 0;
+        if (poolInfo[_pid].isPPX) {
+            totalAllocPoint = totalAllocPointPPX;
+        } else {
+            totalAllocPoint = totalAllocPointPPY;
+        }
         uint256 multiplier = getMultiplier(pool.lastRewardBlock, block.number);
-        uint256 cakeReward = multiplier.mul(cakePerBlock).mul(pool.allocPoint).div(totalAllocPoint);
-        cake.mint(devaddr, cakeReward.div(10));
-        cake.mint(address(syrup), cakeReward);
-        pool.accCakePerShare = pool.accCakePerShare.add(cakeReward.mul(1e12).div(lpSupply));
+        uint256 cakeReward =
+            multiplier.mul(cakePerBlock).mul(pool.allocPoint).div(
+                totalAllocPoint
+            );
+
+        if (poolInfo[_pid].isPPX) {
+            ppx.mint(devaddr, cakeReward.div(10));
+            ppx.mint(address(this), cakeReward);
+        } else {
+            ppy.mint(devaddr, cakeReward.div(10));
+            ppy.mint(address(this), cakeReward);
+        }
+
+        pool.accCakePerShare = pool.accCakePerShare.add(
+            cakeReward.mul(1e12).div(lpSupply)
+        );
         pool.lastRewardBlock = block.number;
     }
 
     // Deposit LP tokens to MasterChef for CAKE allocation.
     function deposit(uint256 _pid, uint256 _amount) public {
-
-        require (_pid != 0, 'deposit CAKE by staking');
-
         PoolInfo storage pool = poolInfo[_pid];
         UserInfo storage user = userInfo[_pid][msg.sender];
         updatePool(_pid);
         if (user.weight > 0) {
-            uint256 pending = user.weight.mul(pool.accCakePerShare).div(1e12).sub(user.rewardDebt);
-            if(pending > 0) {
-                safeCakeTransfer(msg.sender, pending);
+            uint256 pending =
+                user.weight.mul(pool.accCakePerShare).div(1e12).sub(
+                    user.rewardDebt
+                );
+            if (pending > 0) {
+                safeTransfer(_pid, msg.sender, pending);
             }
         }
         if (_amount > 0) {
-            pool.lpToken.safeTransferFrom(address(msg.sender), address(this), _amount);
+            pool.lpToken.safeTransferFrom(
+                address(msg.sender),
+                address(this),
+                _amount
+            );
             user.amount = user.amount.add(_amount);
-            
         }
         uint256 oldWeight = user.weight;
-        user.weight = user.amount.mul((100 + levelToBonus(userProfileInfo[msg.sender].level))).div(100);
+        user.weight = user
+            .amount
+            .mul((100 + calculateWeightBonus(address(msg.sender), _pid)))
+            .div(100);
 
-        pool.totalWeightedValue = pool.totalWeightedValue.sub(oldWeight).add(user.weight);
+        pool.totalWeightedValue = pool.totalWeightedValue.sub(oldWeight).add(
+            user.weight
+        );
 
         user.rewardDebt = user.weight.mul(pool.accCakePerShare).div(1e12);
+
+        // NFT
+        checkNFTDrop(_pid);
+
         emit Deposit(msg.sender, _pid, _amount);
     }
 
     // Withdraw LP tokens from MasterChef.
     function withdraw(uint256 _pid, uint256 _amount) public {
-
-        require (_pid != 0, 'withdraw CAKE by unstaking');
         PoolInfo storage pool = poolInfo[_pid];
         UserInfo storage user = userInfo[_pid][msg.sender];
         require(user.amount >= _amount, "withdraw: not good");
 
         updatePool(_pid);
-        uint256 pending = user.amount.mul(pool.accCakePerShare).div(1e12).sub(user.rewardDebt);
-        if(pending > 0) {
-            safeCakeTransfer(msg.sender, pending);
+        uint256 pending =
+            user.amount.mul(pool.accCakePerShare).div(1e12).sub(
+                user.rewardDebt
+            );
+        if (pending > 0) {
+            safeTransfer(_pid, msg.sender, pending);
         }
-        if(_amount > 0) {
+        if (_amount > 0) {
             user.amount = user.amount.sub(_amount);
             pool.lpToken.safeTransfer(address(msg.sender), _amount);
         }
         uint256 oldWeight = user.weight;
-        user.weight = user.amount.mul((100 + levelToBonus(userProfileInfo[msg.sender].level))).div(100);
+        user.weight = user
+            .amount
+            .mul((100 + calculateWeightBonus(address(msg.sender), _pid)))
+            .div(100);
 
-        pool.totalWeightedValue = pool.totalWeightedValue.sub(oldWeight).add(user.weight);
+        pool.totalWeightedValue = pool.totalWeightedValue.sub(oldWeight).add(
+            user.weight
+        );
 
         user.rewardDebt = user.amount.mul(pool.accCakePerShare).div(1e12);
+
+        // NFT
+        checkNFTDrop(_pid);
+
+
         emit Withdraw(msg.sender, _pid, _amount);
     }
 
@@ -310,9 +486,35 @@ contract MasterChef is Ownable {
         user.rewardDebt = 0;
     }
 
+    function safeTransfer(
+        uint256 _pid,
+        address _to,
+        uint256 _amount
+    ) internal {
+        if (poolInfo[_pid].isPPX) {
+            safePPXTransfer(_to, _amount);
+        } else {
+            safePPYTransfer(_to, _amount);
+        }
+    }
+
     // Safe cake transfer function, just in case if rounding error causes pool to not have enough CAKEs.
-    function safeCakeTransfer(address _to, uint256 _amount) internal {
-        syrup.safeCakeTransfer(_to, _amount);
+    function safePPXTransfer(address _to, uint256 _amount) internal {
+        uint256 cakeBal = ppx.balanceOf(address(this));
+        if (_amount > cakeBal) {
+            ppx.transfer(_to, cakeBal);
+        } else {
+            ppx.transfer(_to, _amount);
+        }
+    }
+
+    function safePPYTransfer(address _to, uint256 _amount) internal {
+        uint256 cakeBal = ppy.balanceOf(address(this));
+        if (_amount > cakeBal) {
+            ppy.transfer(_to, cakeBal);
+        } else {
+            ppy.transfer(_to, _amount);
+        }
     }
 
     // Update dev address by the previous dev.
@@ -321,43 +523,138 @@ contract MasterChef is Ownable {
         devaddr = _devaddr;
     }
 
-    function equipmentToPpxBonus(uint256 tokenId, uint256 poolId) internal returns (uint256) {
-        uint256 result = 0;
-        result += equipmentDetails[tokenId].ppx;
-        if (equipmentDetails[tokenId].ppxsp == poolId) {
-            result += equipmentDetails[tokenId].ppxspvalue;
-        }
-        return result;
-    }
-
-    function equipmentToPpyBonus(uint256 tokenId, uint256 poolId) internal returns (uint256) {
-        uint256 result = 0;
-        result = result + equipmentDetails[tokenId].ppy;
-        if (equipmentDetails[tokenId].ppysp == poolId) {
-            result += equipmentDetails[tokenId].ppyspvalue;
-        }
-        return result;
-    }
-
-    function equipmentToMfBonus(uint256 tokenId, uint256 poolId) internal returns (uint256) {
-        uint256 result = 0;
-        result = result + equipmentDetails[tokenId].mf;
-        if (equipmentDetails[tokenId].mfsp == poolId) {
-            result += equipmentDetails[tokenId].mfspvalue;
-        }
-        return result;
-    }
-
-function enoughLevel(uint256 level,uint256 tokenId ) internal returns (bool) {
-        
+    function enoughLevel(uint256 level, uint256 tokenId)
+        internal
+        view
+        returns (bool)
+    {
         if (equipmentDetails[tokenId].level <= level) {
             return true;
         }
         return false;
     }
 
-    function levelToBonus(uint256 level) internal returns (uint256) {
-        
+    function levelToBonus(uint256 level) internal view returns (uint256) {
         return level;
+    }
+
+    function getPPXBonus(uint256 attr, uint256 _pid) internal view returns (uint256){
+        uint256 attr_type = attr % (2**32);
+
+        if (attr_type == 1) { // global ppx bonus
+            return (attr_type >> 32);
+        }
+        else if (attr_type == 4) { // ppx bonus on specific pool
+            return (attr_type >> 32) == _pid ? (attr_type >> 64) : 0;
+        }
+
+        return 0;
+    }
+
+    function getPPYBonus(uint256 attr, uint256 _pid) internal view returns (uint256){
+        uint256 attr_type = attr % (2**32);
+
+        if (attr_type == 2) { // global ppy bonus
+            return (attr_type >> 32);
+        }
+        else if (attr_type == 5) { // ppy bonus on specific pool
+            return (attr_type >> 32) == _pid ? (attr_type >> 64) : 0;
+        }
+
+        return 0;
+    }
+
+    function getMFBonus(uint256 attr, uint256 _pid) internal view returns (uint256){
+        uint256 attr_type = attr % (2**32);
+
+        if (attr_type == 3) { // global mf bonus
+            return (attr_type >> 32);
+        }
+        else if (attr_type == 6) { // mf bonus on specific pool
+            return (attr_type >> 32) == _pid ? (attr_type >> 64) : 0;
+        }
+        return 0;
+    }
+
+    function calculateWeightBonus(address _user, uint256 _pid)
+        public
+        view
+        returns (uint256)
+    {
+        uint256 levelBonus =
+            levelToBonus(userProfileInfo[_user].level).add(100);
+        uint256 equipBonus = 100;
+
+        bool isPPX = poolInfo[_pid].isPPX;
+
+        if (userProfileInfo[_user].slotNum <= 6) {
+            for (uint256 i = 0; i < userProfileInfo[_user].slotNum; i++) {
+                uint256 nft = userProfileInfo[_user].equipSlot[i];
+                if (
+                    nft > 0 &&
+                    ppe.checkOwner(nft, _user) &&
+                    equipmentDetails[nft].level <= userProfileInfo[_user].level
+                ) {
+                    if (isPPX) {
+                            for (uint256 j = 0; j < 6;j++) {
+                                if (equipmentDetails[nft].attr[j] == 0) {
+                                    break;
+                                }
+                                equipBonus = equipBonus
+                                .mul(getPPXBonus(equipmentDetails[nft].attr[j], _pid).add(100))
+                                .div(100);    
+                            }
+                        }
+                    } else {
+                        for (uint256 j = 0; j < 6; j++) {
+                                if (equipmentDetails[nft].attr[j] == 0) {
+                                    break;
+                                }
+                                equipBonus = equipBonus
+                                .mul(getPPYBonus(equipmentDetails[nft].attr[j], _pid).add(100))
+                                .div(100);    
+                            }
+                    }
+                }
+            }
+
+
+        return levelBonus.mul(equipBonus).div(100).sub(100);
+    }
+
+    function equipNFT(
+        address _user,
+        uint256 _slot,
+        uint256 _tokenId
+    ) public {
+        if (_slot > userProfileInfo[_user].slotNum || _slot > 6) {
+            return;
+        }
+        if (_tokenId == 0) {
+            userProfileInfo[_user].equipSlot[_slot] = _tokenId;
+        } else if (
+            _tokenId > 0 &&
+            ppe.checkOwner(_tokenId, _user) &&
+            equipmentDetails[_tokenId].level <= userProfileInfo[_user].level
+        ) {
+            userProfileInfo[_user].equipSlot[_slot] = _tokenId;
+        }
+    }
+
+    function getLevel(address _user) public view returns (uint256) {
+        return userProfileInfo[_user].level;
+    }
+
+    function getEquip(address _user) public view returns ( uint256[6] memory) {
+        return userProfileInfo[_user].equipSlot;
+    }
+
+    function getSlotNum(address _user) public view returns (uint256) {
+        return userProfileInfo[_user].slotNum;
+
+    }
+
+    function getNFTInfo(uint256 _tokenId) public view returns ( EquipmentDetail memory) {
+        return equipmentDetails[_tokenId];
     }
 }
