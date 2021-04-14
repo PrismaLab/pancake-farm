@@ -1,19 +1,19 @@
 const { expectRevert, time } = require('@openzeppelin/test-helpers');
-const PPXToken = artifacts.require('PPXToken');
-const PPYToken = artifacts.require('PPYToken');
+const YAYAToken = artifacts.require('YAYAToken');
+const PAPAToken = artifacts.require('PAPAToken');
 const EquipmentNFT = artifacts.require('EquipmentNFT');
-const MasterChef = artifacts.require('MasterChef');
+const FishingMaster = artifacts.require('FishingMaster');
 const MockBEP20 = artifacts.require('libs/MockBEP20');
 
-contract('MasterChef', ([alice, bob, carol, dev, minter]) => {
+contract('FishingMaster', ([alice, bob, carol, dev, minter]) => {
     beforeEach(async () => {
-        this.ppx = await PPXToken.new({ from: minter });
-        this.ppy = await PPYToken.new({ from: minter });
+        this.ppx = await YAYAToken.new({ from: minter });
+        this.ppy = await PAPAToken.new({ from: minter });
         this.ppe = await EquipmentNFT.new({ from: minter });
         this.lp1 = await MockBEP20.new('LPToken', 'LP1', '1000000', { from: minter });
         this.lp2 = await MockBEP20.new('LPToken', 'LP2', '1000000', { from: minter });
         this.lp3 = await MockBEP20.new('LPToken', 'LP3', '1000000', { from: minter });
-        this.chef = await MasterChef.new(this.ppx.address, this.ppy.address, this.ppe.address, dev, '1000', '100', { from: minter });
+        this.chef = await FishingMaster.new(this.ppx.address, this.ppy.address, this.ppe.address, dev, '1000', '1000','100', { from: minter });
         await this.ppx.transferOwnership(this.chef.address, { from: minter });
         await this.ppy.transferOwnership(this.chef.address, { from: minter });
         await this.ppe.transferOwnership(this.chef.address, { from: minter });

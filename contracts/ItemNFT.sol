@@ -1,17 +1,15 @@
 // SPDX-License-Identifier: MIT
-pragma solidity 0.8.0;
+pragma solidity ^0.8.0;
 
 import "@openzeppelin/contracts/utils/Counters.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
-
 import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 
-contract EquipmentNFT is ERC721, Ownable {
+contract ItemNFT is ERC721, Ownable {
     using Counters for Counters.Counter;
     Counters.Counter private _tokenIds;
 
-    
-    constructor() ERC721("NFT-Equipment", "PPE") {}
+    constructor() ERC721("PapayaSwap Item NFT", "PAPAYANFT") {}
 
     function mintNft(address receiver) external onlyOwner returns (uint256) {
         _tokenIds.increment();
@@ -22,8 +20,11 @@ contract EquipmentNFT is ERC721, Ownable {
         return newNftTokenId;
     }
 
-    function checkOwner(uint256 _tokenId, address _user) public view returns (bool) {
+    function checkOwner(uint256 _tokenId, address _user)
+        public
+        view
+        returns (bool)
+    {
         return (ownerOf(_tokenId) == _user);
     }
-
 }

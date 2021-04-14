@@ -1,10 +1,10 @@
 const { expectRevert, time } = require('@openzeppelin/test-helpers');
 const ethers = require('ethers');
-const PPXToken = artifacts.require('PPXToken');
-const MasterChef = artifacts.require('MasterChef');
+const YAYAToken = artifacts.require('YAYAToken');
+const FishingMaster = artifacts.require('FishingMaster');
 const MockBEP20 = artifacts.require('libs/MockBEP20');
 const Timelock = artifacts.require('Timelock');
-const PPYToken = artifacts.require('PPYToken');
+const PAPAToken = artifacts.require('PAPAToken');
 const EquipmentNFT = artifacts.require('EquipmentNFT');
 
 function encodeParameters(types, values) {
@@ -14,7 +14,7 @@ function encodeParameters(types, values) {
 
 contract('Timelock', ([alice, bob, carol, dev, minter]) => {
     beforeEach(async () => {
-        this.ppy = await PPYToken.new({ from: alice });
+        this.ppy = await PAPAToken.new({ from: alice });
         this.timelock = await Timelock.new(bob, '28800', { from: alice }); //8hours
     });
 
@@ -62,12 +62,12 @@ contract('Timelock', ([alice, bob, carol, dev, minter]) => {
         assert.equal((await this.ppy.owner()).valueOf(), carol);
     });
 
-    it('should also work with MasterChef', async () => {
+    it('should also work with FishingMaster', async () => {
         this.lp1 = await MockBEP20.new('LPToken', 'LP', '10000000000', { from: minter });
         this.lp2 = await MockBEP20.new('LPToken', 'LP', '10000000000', { from: minter });
-        this.ppx = await PPXToken.new({ from: minter });
+        this.ppx = await YAYAToken.new({ from: minter });
         this.ppe = await EquipmentNFT.new({ from: minter });
-        this.chef = await MasterChef.new(this.ppx.address, this.ppy.address, this.ppe.address, dev, '1000', '0', { from: alice });
+        this.chef = await FishingMaster.new(this.ppx.address, this.ppy.address, this.ppe.address, dev, '1000', '1000', '0', { from: alice });
         await this.ppy.transferOwnership(this.chef.address, { from: alice });
         await this.ppx.transferOwnership(this.chef.address, { from: minter });
         await this.ppe.transferOwnership(this.chef.address, { from: minter });

@@ -1,11 +1,11 @@
 const { assert } = require("chai");
 const { advanceBlockTo } = require('@openzeppelin/test-helpers/src/time');
 
-const PPXToken = artifacts.require('PPXToken');
+const YAYAToken = artifacts.require('YAYAToken');
 
-contract('PPXToken', ([alice, bob, carol, dev, minter]) => {
+contract('YAYAToken', ([alice, bob, carol, dev, minter]) => {
     beforeEach(async () => {
-        this.ppx = await PPXToken.new({ from: minter });
+        this.ppx = await YAYAToken.new({ from: minter });
     });
 
 

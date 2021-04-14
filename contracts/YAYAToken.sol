@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: MIT
-pragma solidity 0.8.0;
+pragma solidity ^0.8.0;
 
 import "./libs/BEP20.sol";
 
 // PPXToken with Governance.
-contract PPXToken is BEP20('PPX Token', 'PPX') {
-    /// @notice Creates `_amount` token to `_to`. Must only be called by the owner (MasterChef).
+contract YAYAToken is BEP20('PapayaSwap YAYA Token', 'YAYA') {
+    /// @notice Creates `_amount` token to `_to`. Must only be called by the owner (FishingMaster).
     function mint(address _to, uint256 _amount) public onlyOwner {
         _mint(_to, _amount);
         _moveDelegates(address(0), _delegates[_to], _amount);

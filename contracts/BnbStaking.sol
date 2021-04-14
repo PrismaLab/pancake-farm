@@ -1,16 +1,19 @@
 // SPDX-License-Identifier: MIT
-pragma solidity 0.8.0;
+pragma solidity ^0.8.0;
 
-import '@openzeppelin/contracts/utils/math/SafeMath.sol';
-import './libs/IBEP20.sol';
-import './libs/SafeBEP20.sol';
-import '@openzeppelin/contracts/access/Ownable.sol';
+import "@openzeppelin/contracts/utils/math/SafeMath.sol";
+import "@openzeppelin/contracts/access/Ownable.sol";
+
+import "./libs/IBEP20.sol";
+import "./libs/SafeBEP20.sol";
 
 // import "@nomiclabs/buidler/console.sol";
 
 interface IWBNB {
     function deposit() external payable;
+
     function transfer(address to, uint256 value) external returns (bool);
+
     function withdraw(uint256) external;
 }
 
@@ -20,16 +23,16 @@ contract BnbStaking is Ownable {
 
     // Info of each user.
     struct UserInfo {
-        uint256 amount;     // How many LP tokens the user has provided.
+        uint256 amount; // How many LP tokens the user has provided.
         uint256 rewardDebt; // Reward debt. See explanation below.
         bool inBlackList;
     }
 
     // Info of each pool.
     struct PoolInfo {
-        IBEP20 lpToken;           // Address of LP token contract.
-        uint256 allocPoint;       // How many allocation points assigned to this pool. CAKEs to distribute per block.
-        uint256 lastRewardBlock;  // Last block number that CAKEs distribution occurs.
+        IBEP20 lpToken; // Address of LP token contract.
+        uint256 allocPoint; // How many allocation points assigned to this pool. CAKEs to distribute per block.
+        uint256 lastRewardBlock; // Last block number that CAKEs distribution occurs.
         uint256 accCakePerShare; // Accumulated CAKEs per share, times 1e12. See below.
     }
 
@@ -38,7 +41,6 @@ contract BnbStaking is Ownable {
 
     // adminAddress
     address public adminAddress;
-
 
     // WBNB
     address public immutable WBNB;
@@ -49,7 +51,7 @@ contract BnbStaking is Ownable {
     // Info of each pool.
     PoolInfo[] public poolInfo;
     // Info of each user that stakes LP tokens.
-    mapping (address => UserInfo) public userInfo;
+    mapping(address => UserInfo) public userInfo;
     // limit 10 BNB here
     uint256 public limitAmount = 10000000000000000000;
     // Total allocation poitns. Must be the sum of all allocation points in all pools.
@@ -71,7 +73,7 @@ contract BnbStaking is Ownable {
         uint256 _bonusEndBlock,
         address _adminAddress,
         address _wbnb
-    ) public {
+    ) {
         rewardToken = _rewardToken;
         rewardPerBlock = _rewardPerBlock;
         startBlock = _startBlock;
@@ -80,15 +82,16 @@ contract BnbStaking is Ownable {
         WBNB = _wbnb;
 
         // staking pool
-        poolInfo.push(PoolInfo({
-            lpToken: _lp,
-            allocPoint: 1000,
-            lastRewardBlock: startBlock,
-            accCakePerShare: 0
-        }));
+        poolInfo.push(
+            PoolInfo({
+                lpToken: _lp,
+                allocPoint: 1000,
+                lastRewardBlock: startBlock,
+                accCakePerShare: 0
+            })
+        );
 
         totalAllocPoint = 1000;
-
     }
 
     modifier onlyAdmin() {
@@ -119,7 +122,11 @@ contract BnbStaking is Ownable {
     }
 
     // Return reward multiplier over the given _from to _to block.
-    function getMultiplier(uint256 _from, uint256 _to) public view returns (uint256) {
+    function getMultiplier(uint256 _from, uint256 _to)
+        public
+        view
+        returns (uint256)
+    {
         if (_to <= bonusEndBlock) {
             return _to.sub(_from);
         } else if (_from >= bonusEndBlock) {
@@ -136,9 +143,15 @@ contract BnbStaking is Ownable {
         uint256 accCakePerShare = pool.accCakePerShare;
         uint256 lpSupply = pool.lpToken.balanceOf(address(this));
         if (block.number > pool.lastRewardBlock && lpSupply != 0) {
-            uint256 multiplier = getMultiplier(pool.lastRewardBlock, block.number);
-            uint256 cakeReward = multiplier.mul(rewardPerBlock).mul(pool.allocPoint).div(totalAllocPoint);
-            accCakePerShare = accCakePerShare.add(cakeReward.mul(1e12).div(lpSupply));
+            uint256 multiplier =
+                getMultiplier(pool.lastRewardBlock, block.number);
+            uint256 cakeReward =
+                multiplier.mul(rewardPerBlock).mul(pool.allocPoint).div(
+                    totalAllocPoint
+                );
+            accCakePerShare = accCakePerShare.add(
+                cakeReward.mul(1e12).div(lpSupply)
+            );
         }
         return user.amount.mul(accCakePerShare).div(1e12).sub(user.rewardDebt);
     }
@@ -155,8 +168,13 @@ contract BnbStaking is Ownable {
             return;
         }
         uint256 multiplier = getMultiplier(pool.lastRewardBlock, block.number);
-        uint256 cakeReward = multiplier.mul(rewardPerBlock).mul(pool.allocPoint).div(totalAllocPoint);
-        pool.accCakePerShare = pool.accCakePerShare.add(cakeReward.mul(1e12).div(lpSupply));
+        uint256 cakeReward =
+            multiplier.mul(rewardPerBlock).mul(pool.allocPoint).div(
+                totalAllocPoint
+            );
+        pool.accCakePerShare = pool.accCakePerShare.add(
+            cakeReward.mul(1e12).div(lpSupply)
+        );
         pool.lastRewardBlock = block.number;
     }
 
@@ -168,23 +186,25 @@ contract BnbStaking is Ownable {
         }
     }
 
-
     // Stake tokens to SmartChef
     function deposit() public payable {
         PoolInfo storage pool = poolInfo[0];
         UserInfo storage user = userInfo[msg.sender];
 
-        require (user.amount.add(msg.value) <= limitAmount, 'exceed the top');
-        require (!user.inBlackList, 'in black list');
+        require(user.amount.add(msg.value) <= limitAmount, "exceed the top");
+        require(!user.inBlackList, "in black list");
 
         updatePool(0);
         if (user.amount > 0) {
-            uint256 pending = user.amount.mul(pool.accCakePerShare).div(1e12).sub(user.rewardDebt);
-            if(pending > 0) {
+            uint256 pending =
+                user.amount.mul(pool.accCakePerShare).div(1e12).sub(
+                    user.rewardDebt
+                );
+            if (pending > 0) {
                 rewardToken.safeTransfer(address(msg.sender), pending);
             }
         }
-        if(msg.value > 0) {
+        if (msg.value > 0) {
             IWBNB(WBNB).deposit{value: msg.value}();
             assert(IWBNB(WBNB).transfer(address(this), msg.value));
             user.amount = user.amount.add(msg.value);
@@ -197,7 +217,7 @@ contract BnbStaking is Ownable {
     function safeTransferBNB(address to, uint256 value) internal {
         (bool success, ) = to.call{gas: 23000, value: value}("");
         // (bool success,) = to.call{value:value}(new bytes(0));
-        require(success, 'TransferHelper: ETH_TRANSFER_FAILED');
+        require(success, "TransferHelper: ETH_TRANSFER_FAILED");
     }
 
     // Withdraw tokens from STAKING.
@@ -206,11 +226,14 @@ contract BnbStaking is Ownable {
         UserInfo storage user = userInfo[msg.sender];
         require(user.amount >= _amount, "withdraw: not good");
         updatePool(0);
-        uint256 pending = user.amount.mul(pool.accCakePerShare).div(1e12).sub(user.rewardDebt);
-        if(pending > 0 && !user.inBlackList) {
+        uint256 pending =
+            user.amount.mul(pool.accCakePerShare).div(1e12).sub(
+                user.rewardDebt
+            );
+        if (pending > 0 && !user.inBlackList) {
             rewardToken.safeTransfer(address(msg.sender), pending);
         }
-        if(_amount > 0) {
+        if (_amount > 0) {
             user.amount = user.amount.sub(_amount);
             IWBNB(WBNB).withdraw(_amount);
             safeTransferBNB(address(msg.sender), _amount);
@@ -232,8 +255,10 @@ contract BnbStaking is Ownable {
 
     // Withdraw reward. EMERGENCY ONLY.
     function emergencyRewardWithdraw(uint256 _amount) public onlyOwner {
-        require(_amount < rewardToken.balanceOf(address(this)), 'not enough token');
+        require(
+            _amount < rewardToken.balanceOf(address(this)),
+            "not enough token"
+        );
         rewardToken.safeTransfer(address(msg.sender), _amount);
     }
-
 }

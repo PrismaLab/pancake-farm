@@ -10,7 +10,7 @@
 
 // SPDX-License-Identifier: BSD-3-Clause License
 // XXX: pragma solidity ^0.5.16;
-pragma solidity 0.8.0;
+pragma solidity ^0.8.0;
 
 // XXX: import "./SafeMath.sol";
 import "@openzeppelin/contracts/utils/math/SafeMath.sol";
@@ -37,7 +37,7 @@ contract Timelock {
     mapping (bytes32 => bool) public queuedTransactions;
 
 
-    constructor(address admin_, uint delay_) public {
+    constructor (address admin_, uint delay_) {
         require(delay_ >= MINIMUM_DELAY, "Timelock::constructor: Delay must exceed minimum delay.");
         require(delay_ <= MAXIMUM_DELAY, "Timelock::constructor: Delay must not exceed maximum delay.");
 

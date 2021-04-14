@@ -1,10 +1,10 @@
 const { assert } = require("chai");
 
-const PPXToken = artifacts.require('PPXToken');
+const PAPAToken = artifacts.require('PAPAToken');
 
-contract('PPXToken', ([alice, bob, carol, dev, minter]) => {
+contract('PAPAToken', ([alice, bob, carol, dev, minter]) => {
     beforeEach(async () => {
-        this.ppx = await PPXToken.new({ from: minter });
+        this.ppx = await PAPAToken.new({ from: minter });
     });
 
 
