@@ -1,7 +1,7 @@
 const { expectRevert, time } = require('@openzeppelin/test-helpers');
 const YAYAToken = artifacts.require('YAYAToken');
 const PAPAToken = artifacts.require('PAPAToken');
-const EquipmentNFT = artifacts.require('EquipmentNFT');
+const ItemNFT = artifacts.require('ItemNFT');
 const FishingMaster = artifacts.require('FishingMaster');
 const MockBEP20 = artifacts.require('libs/MockBEP20');
 
@@ -9,7 +9,7 @@ contract('FishingMaster', ([alice, bob, carol, dev, minter]) => {
     beforeEach(async () => {
         this.ppx = await YAYAToken.new({ from: minter });
         this.ppy = await PAPAToken.new({ from: minter });
-        this.ppe = await EquipmentNFT.new({ from: minter });
+        this.ppe = await ItemNFT.new({ from: minter });
         this.lp1 = await MockBEP20.new('LPToken', 'LP1', '1000000', { from: minter });
         this.lp2 = await MockBEP20.new('LPToken', 'LP2', '1000000', { from: minter });
         this.lp3 = await MockBEP20.new('LPToken', 'LP3', '1000000', { from: minter });
