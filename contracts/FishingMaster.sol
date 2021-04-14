@@ -78,8 +78,7 @@ contract FishingMaster is Ownable {
         uint256[6] attr; // Attributes of the item. attr = type(32) | value <<32.
     }
 
-    // Item details: tokenId => details.
-    mapping(uint256 => itemDetail) public itemDetails;
+    
 
     // The ExpToken TOKEN!
     YAYAToken public expToken;
@@ -87,31 +86,23 @@ contract FishingMaster is Ownable {
     PAPAToken public mainToken;
     // The ItemToken TOKEN!
     ItemNFT public itemToken;
+
+    // The migrator contract. It has a lot of power. Can only be set through governance (owner).
+    IMigratorChef public migrator;
     // Dev address.
     address public devaddr;
+
     // Exp tokens (PAPA) created per block.
     uint256 public expTokenPerBlock;
     // Main tokens (YAYA) created per block.
     uint256 public mainTokenPerBlock;
     // Bonus muliplier for early fishers.
     uint256 public BONUS_MULTIPLIER = 1;
-    // The migrator contract. It has a lot of power. Can only be set through governance (owner).
-    IMigratorChef public migrator;
-
-    // Info of each pool.
-    PoolInfo[] public poolInfo;
-
-    // User profiles.
-    mapping(address => UserProfileInfo) public userProfileInfo;
-
-    // Info of each user that stakes LP tokens.
-    mapping(uint256 => mapping(address => UserInfo)) public userInfo;
-    // Total allocation points. Must be the sum of all allocation points in all pools.
-    uint256 public totalAllocPointExpToken = 0;
-    uint256 public totalAllocPointMainToken = 0;
     // The block number when tokens mining starts.
     uint256 public startBlock;
 
+    // Level cap for now.
+    uint256 public MAX_LEVEL = 20;
     // Base NFT drop rate increment per block.
     uint256 public NFT_BASE_DROP_RATE_INC = 2;
     // Base NFT drop rate denominator.
@@ -119,8 +110,19 @@ contract FishingMaster is Ownable {
     // Base NFT drop rate cap.
     uint256 public NFT_DROP_RATE_CAP = 20000;
 
-    // Level cap for now.
-    uint256 public MAX_LEVEL = 20;
+
+    // Item details: tokenId => details.
+    mapping(uint256 => itemDetail) public itemDetails;
+    // User profiles.
+    mapping(address => UserProfileInfo) public userProfileInfo;
+    // Info of each user that stakes LP tokens.
+    mapping(uint256 => mapping(address => UserInfo)) public userInfo;
+
+    // Info of each pool.
+    PoolInfo[] public poolInfo;
+    // Total allocation points. Must be the sum of all allocation points in all pools.
+    uint256 public totalAllocPointExpToken = 0;
+    uint256 public totalAllocPointMainToken = 0;
 
     event Deposit(address indexed user, uint256 indexed pid, uint256 amount);
     event Withdraw(address indexed user, uint256 indexed pid, uint256 amount);
@@ -129,9 +131,7 @@ contract FishingMaster is Ownable {
         uint256 indexed pid,
         uint256 amount
     );
-
     event MintNFT(address indexed user, uint256 indexed tokenid);
-    event GenNFTAttr(uint256 attr);
 
     constructor(
         YAYAToken _expToken,
@@ -189,8 +189,8 @@ contract FishingMaster is Ownable {
     }
 
     // Manually mint a random NFT
-    function mintRandomNFT(address recv) external onlyOwner returns (uint256) {
-        return genRandomNFT(recv, randomForNFT(0));
+    function mintRandomNFT(address recv) external onlyOwner {
+        genRandomNFT(recv, MAX_LEVEL, randomForNFT(0));
     }
 
     // Manually mint a NFT with given attributes.
@@ -199,7 +199,7 @@ contract FishingMaster is Ownable {
         uint256 _level,
         uint256 _template,
         uint256[6] calldata _attr
-    ) external onlyOwner returns (uint256) {
+    ) external onlyOwner {
         require(_template != 0, "do not pretent to be random!");
         uint256 newToken = itemToken.mintNft(recv);
         itemDetail storage detail = itemDetails[newToken];
@@ -209,7 +209,6 @@ contract FishingMaster is Ownable {
         for (uint256 i = 0; i < 6; i += 1) {
             detail.attr[i] = _attr[i];
         }
-        return newToken;
     }
 
     // Equip an item to a slot.
@@ -401,7 +400,7 @@ contract FishingMaster is Ownable {
     }
 
     // Deposit LP tokens to FishingMaster for token allocation.
-    function deposit(uint256 _pid, uint256 _amount) public returns (uint256) {
+    function deposit(uint256 _pid, uint256 _amount) public {
         PoolInfo storage pool = poolInfo[_pid];
         UserInfo storage user = userInfo[_pid][msg.sender];
         bool existingDeposit = false;
@@ -446,16 +445,15 @@ contract FishingMaster is Ownable {
         // NFT
         if (existingDeposit) {
             // Positive balance before action, need roll
-            return checkNFTDrop(_pid, false);
+            checkNFTDrop(_pid, userProfileInfo[msg.sender].level, false);
         } else if (newDeposit) {
             // Zero balance before action but non-zero after, reset counter
-            return checkNFTDrop(_pid, true);
+            checkNFTDrop(_pid, userProfileInfo[msg.sender].level, true);
         }
-        return 0;
     }
 
     // Withdraw LP tokens from FishingMaster.
-    function withdraw(uint256 _pid, uint256 _amount) public returns (uint256) {
+    function withdraw(uint256 _pid, uint256 _amount) public {
         PoolInfo storage pool = poolInfo[_pid];
         UserInfo storage user = userInfo[_pid][msg.sender];
         bool existingDeposit = false;
@@ -494,9 +492,8 @@ contract FishingMaster is Ownable {
         // NFT
         if (existingDeposit) {
             // Positive balance before action, need roll
-            return checkNFTDrop(_pid, false);
+            checkNFTDrop(_pid, userProfileInfo[msg.sender].level, false);
         }
-        return 0;
     }
 
     // Withdraw without caring about rewards. EMERGENCY ONLY.
@@ -715,7 +712,7 @@ contract FishingMaster is Ownable {
         uint256 r,
         uint256 level,
         uint256 poolSize
-    ) private returns (uint256) {
+    ) private view returns (uint256) {
         uint256 r1 = randomForNFT(r);
         uint256 attr = (r1 % 6) + 1;
         r1 = randomForNFT(r1);
@@ -731,12 +728,11 @@ contract FishingMaster is Ownable {
         } else {
             attr = attr | (attr_v << 32);
         }
-        emit GenNFTAttr(attr);
         return attr;
     }
 
     // Generate a random NFT with a given random seed.
-    function genRandomNFT(address recv, uint256 seed)
+    function genRandomNFT(address recv, uint256 userLevel, uint256 seed)
         private
         returns (uint256)
     {
@@ -747,9 +743,17 @@ contract FishingMaster is Ownable {
         emit MintNFT(recv, newToken);
 
         uint256 rand = randomForNFT(seed);
-
-        uint256 level = (rand % 20) + (MAX_LEVEL.sub(10));
+        uint256 minLevel = 0;
+        if (userLevel > 10) {
+            minLevel = userLevel.sub(10);
+        }
+        uint256 maxLevel = MAX_LEVEL.add(10);
+        uint256 level =  0;
+        if (maxLevel > minLevel)  {
+            level = (rand % (maxLevel - minLevel)).add(minLevel); 
+        }
         level = level - (level % 5) + 5;
+        
         detail.level = level;
 
         for (uint256 i = 0; i < 6; i++) {
@@ -764,7 +768,7 @@ contract FishingMaster is Ownable {
     }
 
     // Drop roll!
-    function checkNFTDrop(uint256 _pid, bool resetCounter)
+    function checkNFTDrop(uint256 _pid, uint256 _userLevel, bool resetCounter)
         private
         returns (uint256)
     {
@@ -779,7 +783,7 @@ contract FishingMaster is Ownable {
         uint256 r = randomForNFT(0);
 
         if (r % NFT_BASE_DROP_RATE_BASE < rate) {
-            return genRandomNFT(msg.sender, r);
+            return genRandomNFT(msg.sender, _userLevel, r);
         }
         return 0;
     }

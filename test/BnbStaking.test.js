@@ -16,7 +16,7 @@ contract('BnbStaking.......', async ([alice, bob, admin, dev, minter]) => {
       this.wBNB.address,
       this.rewardToken.address,
       1000,
-      10,
+      20,
       1010,
       admin,
       this.wBNB.address,
@@ -26,7 +26,7 @@ contract('BnbStaking.......', async ([alice, bob, admin, dev, minter]) => {
   });
 
   it('deposit/withdraw', async () => {
-    await time.advanceBlockTo('10');
+    await time.advanceBlockTo('20');
     await this.bnbChef.deposit({ from: alice, value: 100 });
     await this.bnbChef.deposit({ from: bob, value: 200 });
     assert.equal(

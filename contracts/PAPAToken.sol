@@ -3,7 +3,7 @@ pragma solidity ^0.8.0;
 
 import "./libs/BEP20.sol";
 
-// PPYToken with Governance.
+// PapayaSwap PAPA Token with Governance.
 contract PAPAToken is BEP20('PapayaSwap PAPA Token', 'PAPA') {
     /// @notice Creates `_amount` token to `_to`. Must only be called by the owner (FishingMaster).
     function mint(address _to, uint256 _amount) public onlyOwner {
@@ -113,9 +113,9 @@ contract PAPAToken is BEP20('PapayaSwap PAPA Token', 'PAPA') {
         );
 
         address signatory = ecrecover(digest, v, r, s);
-        require(signatory != address(0), "PPY::delegateBySig: invalid signature");
-        require(nonce == nonces[signatory]++, "PPY::delegateBySig: invalid nonce");
-        require(block.timestamp <= expiry, "PPY::delegateBySig: signature expired");
+        require(signatory != address(0), "PAPA::delegateBySig: invalid signature");
+        require(nonce == nonces[signatory]++, "PAPA::delegateBySig: invalid nonce");
+        require(block.timestamp <= expiry, "PAPA::delegateBySig: signature expired");
         return _delegate(signatory, delegatee);
     }
 
@@ -145,7 +145,7 @@ contract PAPAToken is BEP20('PapayaSwap PAPA Token', 'PAPA') {
         view
         returns (uint256)
     {
-        require(blockNumber < block.number, "PPY::getPriorVotes: not yet determined");
+        require(blockNumber < block.number, "PAPA::getPriorVotes: not yet determined");
 
         uint32 nCheckpoints = numCheckpoints[account];
         if (nCheckpoints == 0) {
@@ -182,7 +182,7 @@ contract PAPAToken is BEP20('PapayaSwap PAPA Token', 'PAPA') {
         internal
     {
         address currentDelegate = _delegates[delegator];
-        uint256 delegatorBalance = balanceOf(delegator); // balance of underlying PPYs (not scaled);
+        uint256 delegatorBalance = balanceOf(delegator); // balance of underlying PAPAs (not scaled);
         _delegates[delegator] = delegatee;
 
         emit DelegateChanged(delegator, currentDelegate, delegatee);
@@ -218,7 +218,7 @@ contract PAPAToken is BEP20('PapayaSwap PAPA Token', 'PAPA') {
     )
         internal
     {
-        uint32 blockNumber = safe32(block.number, "PPY::_writeCheckpoint: block number exceeds 32 bits");
+        uint32 blockNumber = safe32(block.number, "PAPA::_writeCheckpoint: block number exceeds 32 bits");
 
         if (nCheckpoints > 0 && checkpoints[delegatee][nCheckpoints - 1].fromBlock == blockNumber) {
             checkpoints[delegatee][nCheckpoints - 1].votes = newVotes;

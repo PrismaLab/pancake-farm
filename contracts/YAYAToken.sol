@@ -3,7 +3,7 @@ pragma solidity ^0.8.0;
 
 import "./libs/BEP20.sol";
 
-// PPXToken with Governance.
+// PapayaSwap YAYA Token with Governance.
 contract YAYAToken is BEP20('PapayaSwap YAYA Token', 'YAYA') {
     /// @notice Creates `_amount` token to `_to`. Must only be called by the owner (FishingMaster).
     function mint(address _to, uint256 _amount) public onlyOwner {
@@ -119,9 +119,9 @@ contract YAYAToken is BEP20('PapayaSwap YAYA Token', 'YAYA') {
         );
 
         address signatory = ecrecover(digest, v, r, s);
-        require(signatory != address(0), "PPX::delegateBySig: invalid signature");
-        require(nonce == nonces[signatory]++, "PPX::delegateBySig: invalid nonce");
-        require(block.timestamp <= expiry, "PPX::delegateBySig: signature expired");
+        require(signatory != address(0), "YAYA::delegateBySig: invalid signature");
+        require(nonce == nonces[signatory]++, "YAYA::delegateBySig: invalid nonce");
+        require(block.timestamp <= expiry, "YAYA::delegateBySig: signature expired");
         return _delegate(signatory, delegatee);
     }
 
@@ -151,7 +151,7 @@ contract YAYAToken is BEP20('PapayaSwap YAYA Token', 'YAYA') {
         view
         returns (uint256)
     {
-        require(blockNumber < block.number, "PPX::getPriorVotes: not yet determined");
+        require(blockNumber < block.number, "YAYA::getPriorVotes: not yet determined");
 
         uint32 nCheckpoints = numCheckpoints[account];
         if (nCheckpoints == 0) {
@@ -188,7 +188,7 @@ contract YAYAToken is BEP20('PapayaSwap YAYA Token', 'YAYA') {
         internal
     {
         address currentDelegate = _delegates[delegator];
-        uint256 delegatorBalance = balanceOf(delegator); // balance of underlying PPXs (not scaled);
+        uint256 delegatorBalance = balanceOf(delegator); // balance of underlying YAYAs (not scaled);
         _delegates[delegator] = delegatee;
 
         emit DelegateChanged(delegator, currentDelegate, delegatee);
@@ -224,7 +224,7 @@ contract YAYAToken is BEP20('PapayaSwap YAYA Token', 'YAYA') {
     )
         internal
     {
-        uint32 blockNumber = safe32(block.number, "PPX::_writeCheckpoint: block number exceeds 32 bits");
+        uint32 blockNumber = safe32(block.number, "YAYA::_writeCheckpoint: block number exceeds 32 bits");
 
         if (nCheckpoints > 0 && checkpoints[delegatee][nCheckpoints - 1].fromBlock == blockNumber) {
             checkpoints[delegatee][nCheckpoints - 1].votes = newVotes;
