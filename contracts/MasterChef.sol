@@ -89,7 +89,8 @@ contract MasterChef is Ownable {
     // Dev address.
     address public devaddr;
     // CAKE tokens created per block.
-    uint256 public cakePerBlock;
+    uint256 public ppxPerBlock;
+    uint256 public ppyPerBlock;
     // Bonus muliplier for early cake makers.
     uint256 public BONUS_MULTIPLIER = 1;
     // The migrator contract. It has a lot of power. Can only be set through governance (owner).
@@ -134,7 +135,8 @@ contract MasterChef is Ownable {
         ppy = _ppy;
         ppe = _ppe;
         devaddr = _devaddr;
-        cakePerBlock = _cakePerBlock;
+        ppxPerBlock = _cakePerBlock;
+        ppyPerBlock = _cakePerBlock;
         startBlock = _startBlock;
 
         totalAllocPointPPX = 0;
@@ -219,12 +221,10 @@ contract MasterChef is Ownable {
         r1 = randomForNFT(r1);
         if (attr == 4 || attr == 5 || attr == 6) {
             if (poolSize == 0) {
-                attr = (attr-3) | (attr_v << 32);
-            }
-            else {
+                attr = (attr - 3) | (attr_v << 32);
+            } else {
                 attr = ((r1 % poolSize) << 32) | (attr_v << 64) | attr;
             }
-            
         } else {
             attr = attr | (attr_v << 32);
         }
@@ -244,15 +244,15 @@ contract MasterChef is Ownable {
         uint256 level = (r1 % 20) + (NFT_MAX_LEVEL.sub(10));
         level = level - (level % 5) + 5;
         detail.level = level;
-        
-        for (uint256 i = 0; i < 6; i++) {    
+
+        for (uint256 i = 0; i < 6; i++) {
             detail.attr[i] = genAttr(r1, level, poolInfo.length);
             r1 = randomForNFT(r1);
-            if (r1%256 >= 2) {
+            if (r1 % 256 >= 2) {
                 break;
             }
         }
-        
+
         return newToken;
     }
 
@@ -349,6 +349,26 @@ contract MasterChef is Ownable {
         return _to.sub(_from).mul(BONUS_MULTIPLIER);
     }
 
+    function calculateReward(
+        bool isPPX,
+        uint256 allocPoint,
+        uint256 lastRewardBlock
+    ) internal view returns (uint256) {
+        uint256 totalAllocPoint = 0;
+        uint256 cakePerBlock = 0;
+        if (isPPX) {
+            totalAllocPoint = totalAllocPointPPX;
+            cakePerBlock = ppxPerBlock;
+        } else {
+            totalAllocPoint = totalAllocPointPPY;
+            cakePerBlock = ppyPerBlock;
+        }
+        uint256 multiplier = getMultiplier(lastRewardBlock, block.number);
+
+        return
+            multiplier.mul(cakePerBlock).mul(allocPoint).div(totalAllocPoint);
+    }
+
     // View function to see pending CAKEs on frontend.
     function pendingCake(uint256 _pid, address _user)
         external
@@ -360,18 +380,13 @@ contract MasterChef is Ownable {
         uint256 accCakePerShare = pool.accCakePerShare;
         // uint256 lpSupply = pool.lpToken.balanceOf(address(this));
         uint256 lpSupply = pool.totalWeightedValue;
-        uint256 totalAllocPoint = 0;
-        if (poolInfo[_pid].isPPX) {
-            totalAllocPoint = totalAllocPointPPX;
-        } else {
-            totalAllocPoint = totalAllocPointPPY;
-        }
+
         if (block.number > pool.lastRewardBlock && lpSupply != 0) {
-            uint256 multiplier =
-                getMultiplier(pool.lastRewardBlock, block.number);
             uint256 cakeReward =
-                multiplier.mul(cakePerBlock).mul(pool.allocPoint).div(
-                    totalAllocPoint
+                calculateReward(
+                    pool.isPPX,
+                    pool.allocPoint,
+                    pool.lastRewardBlock
                 );
             accCakePerShare = accCakePerShare.add(
                 cakeReward.mul(1e12).div(lpSupply)
@@ -400,17 +415,9 @@ contract MasterChef is Ownable {
             pool.lastRewardBlock = block.number;
             return;
         }
-        uint256 totalAllocPoint = 0;
-        if (poolInfo[_pid].isPPX) {
-            totalAllocPoint = totalAllocPointPPX;
-        } else {
-            totalAllocPoint = totalAllocPointPPY;
-        }
-        uint256 multiplier = getMultiplier(pool.lastRewardBlock, block.number);
+
         uint256 cakeReward =
-            multiplier.mul(cakePerBlock).mul(pool.allocPoint).div(
-                totalAllocPoint
-            );
+            calculateReward(pool.isPPX, pool.allocPoint, pool.lastRewardBlock);
 
         if (poolInfo[_pid].isPPX) {
             ppx.mint(devaddr, cakeReward.div(10));
