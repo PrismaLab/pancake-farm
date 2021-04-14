@@ -130,7 +130,7 @@ contract MasterChef is Ownable {
         address _devaddr,
         uint256 _cakePerBlock,
         uint256 _startBlock
-    ) public {
+    ) {
         ppx = _ppx;
         ppy = _ppy;
         ppe = _ppe;
@@ -206,6 +206,7 @@ contract MasterChef is Ownable {
         for (uint256 i = 0; i < 6; i += 1) {
             detail.attr[i] = _attr[i];
         }
+        return newToken;
     }
 
     function genAttr(
