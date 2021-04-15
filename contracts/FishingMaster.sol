@@ -78,8 +78,6 @@ contract FishingMaster is Ownable {
         uint256[6] attr; // Attributes of the item. attr = type(32) | value <<32.
     }
 
-    
-
     // The ExpToken TOKEN!
     YAYAToken public expToken;
     // The MainToken TOKEN!
@@ -109,7 +107,6 @@ contract FishingMaster is Ownable {
     uint256 public NFT_BASE_DROP_RATE_BASE = 1000000;
     // Base NFT drop rate cap.
     uint256 public NFT_DROP_RATE_CAP = 20000;
-
 
     // Item details: tokenId => details.
     mapping(uint256 => itemDetail) public itemDetails;
@@ -217,17 +214,19 @@ contract FishingMaster is Ownable {
         uint256 _slot,
         uint256 _tokenId
     ) external {
-        if (_slot > userProfileInfo[_user].invSlotNum || _slot > 6) {
+        UserProfileInfo storage userProfile = userProfileInfo[_user];
+        itemDetail storage detail = itemDetails[_tokenId];
+        if (_slot > userProfile.invSlotNum || _slot > 6) {
             return;
         }
         if (_tokenId == 0) {
-            userProfileInfo[_user].invSlot[_slot] = _tokenId;
+            userProfile.invSlot[_slot] = _tokenId;
         } else if (
             _tokenId > 0 &&
             itemToken.checkOwner(_tokenId, _user) &&
-            itemDetails[_tokenId].level <= userProfileInfo[_user].level
+            detail.level <= userProfile.level
         ) {
-            userProfileInfo[_user].invSlot[_slot] = _tokenId;
+            userProfile.invSlot[_slot] = _tokenId;
         }
     }
 
@@ -270,17 +269,20 @@ contract FishingMaster is Ownable {
         view
         returns (uint256[6] memory)
     {
-        return userProfileInfo[_user].invSlot;
+        UserProfileInfo storage userProfile = userProfileInfo[_user];
+        return userProfile.invSlot;
     }
 
     // Query current level.
     function getLevel(address _user) external view returns (uint256) {
-        return userProfileInfo[_user].level;
+        UserProfileInfo storage userProfile = userProfileInfo[_user];
+        return userProfile.level;
     }
 
     // Query max slot number.
     function getInvSlotNum(address _user) external view returns (uint256) {
-        return userProfileInfo[_user].invSlotNum;
+        UserProfileInfo storage userProfile = userProfileInfo[_user];
+        return userProfile.invSlotNum;
     }
 
     // Query NFT attributes.
@@ -289,7 +291,8 @@ contract FishingMaster is Ownable {
         view
         returns (itemDetail memory)
     {
-        return itemDetails[_tokenId];
+        itemDetail storage detail = itemDetails[_tokenId];
+        return detail;
     }
 
     // Public functions
@@ -341,11 +344,12 @@ contract FishingMaster is Ownable {
         if (_withUpdate) {
             massUpdatePools();
         }
-        uint256 prevAllocPoint = poolInfo[_pid].allocPoint;
-        poolInfo[_pid].allocPoint = _allocPoint;
+        PoolInfo storage pool = poolInfo[_pid];
+        uint256 prevAllocPoint = pool.allocPoint;
+        pool.allocPoint = _allocPoint;
 
         if (prevAllocPoint != _allocPoint) {
-            if (poolInfo[_pid].isExpToken) {
+            if (pool.isExpToken) {
                 totalAllocPointExpToken = totalAllocPointExpToken
                     .sub(prevAllocPoint)
                     .add(_allocPoint);
@@ -385,7 +389,7 @@ contract FishingMaster is Ownable {
                 pool.lastRewardBlock
             );
 
-        if (poolInfo[_pid].isExpToken) {
+        if (pool.isExpToken) {
             expToken.mint(devaddr, cakeReward.div(10));
             expToken.mint(address(this), cakeReward);
         } else {
@@ -403,6 +407,8 @@ contract FishingMaster is Ownable {
     function deposit(uint256 _pid, uint256 _amount) public {
         PoolInfo storage pool = poolInfo[_pid];
         UserInfo storage user = userInfo[_pid][msg.sender];
+        UserProfileInfo storage userProfile = userProfileInfo[msg.sender];
+
         bool existingDeposit = false;
         bool newDeposit = false;
 
@@ -445,10 +451,10 @@ contract FishingMaster is Ownable {
         // NFT
         if (existingDeposit) {
             // Positive balance before action, need roll
-            checkNFTDrop(_pid, userProfileInfo[msg.sender].level, false);
+            checkNFTDrop(_pid, userProfile.level, false);
         } else if (newDeposit) {
             // Zero balance before action but non-zero after, reset counter
-            checkNFTDrop(_pid, userProfileInfo[msg.sender].level, true);
+            checkNFTDrop(_pid, userProfile.level, true);
         }
     }
 
@@ -456,6 +462,7 @@ contract FishingMaster is Ownable {
     function withdraw(uint256 _pid, uint256 _amount) public {
         PoolInfo storage pool = poolInfo[_pid];
         UserInfo storage user = userInfo[_pid][msg.sender];
+        UserProfileInfo storage userProfile = userProfileInfo[msg.sender];
         bool existingDeposit = false;
 
         require(user.amount >= _amount, "withdraw: not good");
@@ -492,7 +499,7 @@ contract FishingMaster is Ownable {
         // NFT
         if (existingDeposit) {
             // Positive balance before action, need roll
-            checkNFTDrop(_pid, userProfileInfo[msg.sender].level, false);
+            checkNFTDrop(_pid, userProfile.level, false);
         }
     }
 
@@ -506,14 +513,35 @@ contract FishingMaster is Ownable {
         user.rewardDebt = 0;
     }
 
+    function levelUp() public {
+        UserProfileInfo storage userProfile = userProfileInfo[msg.sender];
+        uint256 level = userProfile.level;
+        uint256 requiremnt = getLevelUpExp(level);
+        uint256 bal = expToken.balanceOf(msg.sender);
+        require(bal >= requiremnt, "No enough balance.");
+
+        userProfile.level = level.add(1);
+        expToken.burn(msg.sender, requiremnt);
+    }
+
     // Public functions that are view
+
+    // Get Exp comsumption for level up.
+    function getLevelUpExp(uint256 _currentLevel)
+        public
+        pure
+        returns (uint256)
+    {
+        // TODO: Change this！
+        return _currentLevel.mul(50).add(100);
+    }
 
     // Get NFT Drop rate for now.
     function getNFTDropRate(uint256 _pid) public view returns (uint256) {
-        if (block.number > userInfo[_pid][msg.sender].lastDropBlock) {
+        UserInfo storage user = userInfo[_pid][msg.sender];
+        if (block.number > user.lastDropBlock) {
             uint256 rate =
-                (block.number - userInfo[_pid][msg.sender].lastDropBlock) *
-                    NFT_BASE_DROP_RATE_INC;
+                (block.number - user.lastDropBlock) * NFT_BASE_DROP_RATE_INC;
             if (rate > NFT_DROP_RATE_CAP) {
                 rate = NFT_DROP_RATE_CAP;
             }
@@ -528,50 +556,50 @@ contract FishingMaster is Ownable {
         view
         returns (uint256)
     {
-        uint256 levelBonus =
-            levelToBonus(userProfileInfo[_user].level).add(100);
+        UserProfileInfo storage userProfile = userProfileInfo[_user];
+        PoolInfo storage pool = poolInfo[_pid];
+
         uint256 itemBonus = 100;
 
-        bool isExpToken = poolInfo[_pid].isExpToken;
-
-        if (userProfileInfo[_user].invSlotNum <= 6) {
-            for (uint256 i = 0; i < userProfileInfo[_user].invSlotNum; i++) {
-                uint256 nft = userProfileInfo[_user].invSlot[i];
-                if (
-                    nft > 0 &&
-                    itemToken.checkOwner(nft, _user) &&
-                    itemDetails[nft].level <= userProfileInfo[_user].level
-                ) {
-                    if (isExpToken) {
-                        for (uint256 j = 0; j < 6; j++) {
-                            if (itemDetails[nft].attr[j] == 0) {
+        if (userProfile.invSlotNum <= 6) {
+            for (uint8 i = 0; i < userProfile.invSlotNum; i++) {
+                if (userProfile.invSlot[i] > 0 && itemToken.checkOwner(userProfile.invSlot[i], _user)) {
+                    itemDetail storage detail = itemDetails[userProfile.invSlot[i]];
+                    if (detail.level > userProfile.level) {
+                        continue;
+                    }
+                    if (pool.isExpToken) {
+                        for (uint8 j = 0; j < 6; j++) {
+                            if (detail.attr[j] == 0) {
                                 break;
                             }
                             itemBonus = itemBonus
                                 .mul(
-                                getExpTokenBonus(itemDetails[nft].attr[j], _pid)
+                                getExpTokenBonus(detail.attr[j], _pid).add(100)
+                            )
+                                .div(100);
+                        }
+                    } else {
+                        for (uint8 j = 0; j < 6; j++) {
+                            if (detail.attr[j] == 0) {
+                                break;
+                            }
+                            itemBonus = itemBonus
+                                .mul(
+                                getMainTokenBonus(
+                                    detail.attr[j],
+                                    _pid
+                                )
                                     .add(100)
                             )
                                 .div(100);
                         }
                     }
-                } else {
-                    for (uint256 j = 0; j < 6; j++) {
-                        if (itemDetails[nft].attr[j] == 0) {
-                            break;
-                        }
-                        itemBonus = itemBonus
-                            .mul(
-                            getMainTokenBonus(itemDetails[nft].attr[j], _pid)
-                                .add(100)
-                        )
-                            .div(100);
-                    }
                 }
             }
         }
 
-        return levelBonus.mul(itemBonus).div(100).sub(100);
+        return levelToBonus(userProfile.level).add(100).mul(itemBonus).div(100).sub(100);
     }
 
     // Internal functions
@@ -582,7 +610,8 @@ contract FishingMaster is Ownable {
         address _to,
         uint256 _amount
     ) internal {
-        if (poolInfo[_pid].isExpToken) {
+        PoolInfo storage pool = poolInfo[_pid];
+        if (pool.isExpToken) {
             safeExpTokenTransfer(_to, _amount);
         } else {
             safeMainTokenTransfer(_to, _amount);
@@ -732,10 +761,11 @@ contract FishingMaster is Ownable {
     }
 
     // Generate a random NFT with a given random seed.
-    function genRandomNFT(address recv, uint256 userLevel, uint256 seed)
-        private
-        returns (uint256)
-    {
+    function genRandomNFT(
+        address recv,
+        uint256 userLevel,
+        uint256 seed
+    ) private returns (uint256) {
         uint256 newToken = itemToken.mintNft(recv);
         itemDetail storage detail = itemDetails[newToken];
         detail.template = 0;
@@ -748,12 +778,12 @@ contract FishingMaster is Ownable {
             minLevel = userLevel.sub(10);
         }
         uint256 maxLevel = MAX_LEVEL.add(10);
-        uint256 level =  0;
-        if (maxLevel > minLevel)  {
-            level = (rand % (maxLevel - minLevel)).add(minLevel); 
+        uint256 level = 0;
+        if (maxLevel > minLevel) {
+            level = (rand % (maxLevel - minLevel)).add(minLevel);
         }
         level = level - (level % 5) + 5;
-        
+
         detail.level = level;
 
         for (uint256 i = 0; i < 6; i++) {
@@ -768,10 +798,11 @@ contract FishingMaster is Ownable {
     }
 
     // Drop roll!
-    function checkNFTDrop(uint256 _pid, uint256 _userLevel, bool resetCounter)
-        private
-        returns (uint256)
-    {
+    function checkNFTDrop(
+        uint256 _pid,
+        uint256 _userLevel,
+        bool resetCounter
+    ) private returns (uint256) {
         // Reset last block without roll.
         if (resetCounter) {
             userInfo[_pid][msg.sender].lastDropBlock = block.number;
