@@ -106,7 +106,7 @@ contract('FishingMaster', ([alice, bob, carol, dev, minter]) => {
       await this.ppx.approve(this.chef.address, '100', { from: alice });
       await this.ppx.approve(this.chef.address, '100', { from: bob });
 
-      await this.chef.updateMultiplier('0', { from: minter });
+      await this.chef.updateExpMultiplier('0', { from: minter });
 
       await this.chef.deposit(0, '0', { from: alice });
       await this.chef.deposit(0, '0', { from: bob });
