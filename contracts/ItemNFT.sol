@@ -20,6 +20,11 @@ contract ItemNFT is ERC721, Ownable {
         return newNftTokenId;
     }
 
+    function burnNft(uint256 _tokenId, address _owner) external onlyOwner {
+        require(_isApprovedOrOwner(_owner, _tokenId), "ERC721: transfer caller is not owner nor approved");
+        _burn(_tokenId);
+    }
+
     function checkOwner(uint256 _tokenId, address _user)
         public
         view

@@ -118,6 +118,9 @@ contract FishingMaster is Ownable {
     // Base NFT drop rate cap.
     uint256 public NFT_DROP_RATE_CAP = 20000;
 
+    // Base NFT price.
+    uint256 public RANDOM_NFT_PRICE = 0;
+
     // Item details: tokenId => details.
     mapping(uint256 => itemDetail) public itemDetails;
     // User profiles.
@@ -178,6 +181,11 @@ contract FishingMaster is Ownable {
     // Update max level.
     function updateMaxLevel(uint256 max_level) external onlyOwner {
         MAX_LEVEL = max_level;
+    }
+
+    // Update random nft price.
+    function updateRandomNftPrice(uint256 price) external onlyOwner {
+        RANDOM_NFT_PRICE = price;
     }
 
     // Update item drop rates.
@@ -249,7 +257,87 @@ contract FishingMaster is Ownable {
         }
     }
 
+    // User pay exp to levelup.
+    function levelUp() external {
+        UserProfileInfo storage userProfile = userProfileInfo[msg.sender];
+        uint256 level = userProfile.level;
+        uint256 requiremnt = getLevelUpExp(level);
+        uint256 bal = expToken.balanceOf(msg.sender);
+        require(bal >= requiremnt, "No enough balance.");
+
+        userProfile.level = level.add(1);
+        expToken.burn(msg.sender, requiremnt);
+    }
+
+    // User pay exp to unlock item .
+    function unlockItemSlot() external {
+        UserProfileInfo storage userProfile = userProfileInfo[msg.sender];
+        uint256 slotNum = userProfile.invSlotNum;
+        require(slotNum < 6, "Maximum slot unlocked.");
+
+        uint256 requiremnt = getUnlockSlotExp(slotNum);
+        userProfile.invSlotNum = slotNum.add(1);
+        if (requiremnt > 0) {
+            uint256 bal = expToken.balanceOf(msg.sender);
+            require(bal >= requiremnt, "No enough balance.");
+            expToken.burn(msg.sender, requiremnt);
+        }
+    }
+
+    // Buy random NFT with exp!
+    function buyRandomNFT() external {
+        UserProfileInfo storage userProfile = userProfileInfo[msg.sender];
+
+        if (RANDOM_NFT_PRICE > 0) {
+            uint256 bal = expToken.balanceOf(msg.sender);
+            require(bal >= RANDOM_NFT_PRICE, "No enough balance.");
+
+            // srand
+            randomForNFT(true);
+            genRandomNFT(msg.sender, userProfile.level);
+
+            expToken.burn(msg.sender, RANDOM_NFT_PRICE);
+        }
+    }
+
+    // Reforge NFT!
+    function reforgeNFT(
+        uint256 tokenId1,
+        uint256 tokenId2,
+        uint256 tokenId3
+    ) external {
+        UserProfileInfo storage userProfile = userProfileInfo[msg.sender];
+
+        require(itemToken.checkOwner(tokenId1, msg.sender), "Not owner!");
+        require(itemToken.checkOwner(tokenId2, msg.sender), "Not owner!");
+        require(itemToken.checkOwner(tokenId3, msg.sender), "Not owner!");
+
+        for (uint8 i = 0; i < 6; i++) {
+            if (userProfile.invSlot[i] == 0) {
+                continue;
+            }
+            require(userProfile.invSlot[i] != tokenId1, "Item in use!");
+            require(userProfile.invSlot[i] != tokenId2, "Item in use!");
+            require(userProfile.invSlot[i] != tokenId3, "Item in use!");
+        }
+
+        // srand
+        randomForNFT(true);
+        genRandomNFT(msg.sender, userProfile.level);
+
+        itemToken.burnNft(tokenId1, msg.sender);
+        itemToken.burnNft(tokenId2, msg.sender);
+        itemToken.burnNft(tokenId3, msg.sender);
+    }
+
     // External functions that are view
+
+    // Drop rate with modifiers, 5 decimal digit.
+    function getNFTDropRate(uint256 _pid) external view returns(uint256) {
+        return getNFTDropCounter(_pid)
+                .mul(calculateMFBonus(msg.sender).add(100))
+                .div(100).mul(1e5).div(NFT_BASE_DROP_RATE_BASE);
+    }
 
     // View function to see pending tokens on frontend.
     function pendingCake(uint256 _pid, address _user)
@@ -532,18 +620,17 @@ contract FishingMaster is Ownable {
         user.rewardDebt = 0;
     }
 
-    function levelUp() public {
-        UserProfileInfo storage userProfile = userProfileInfo[msg.sender];
-        uint256 level = userProfile.level;
-        uint256 requiremnt = getLevelUpExp(level);
-        uint256 bal = expToken.balanceOf(msg.sender);
-        require(bal >= requiremnt, "No enough balance.");
-
-        userProfile.level = level.add(1);
-        expToken.burn(msg.sender, requiremnt);
-    }
-
     // Public functions that are view
+
+    // Get Exp comsumption for unlocking slot.
+    function getUnlockSlotExp(uint256 _currentSlot)
+        public
+        pure
+        returns (uint256)
+    {
+        // TODO: Change this！
+        return _currentSlot.mul(500);
+    }
 
     // Get Exp comsumption for level up.
     function getLevelUpExp(uint256 _currentLevel)
@@ -553,20 +640,6 @@ contract FishingMaster is Ownable {
     {
         // TODO: Change this！
         return _currentLevel.mul(50).add(100);
-    }
-
-    // Get NFT Drop rate for now.
-    function getNFTDropRate(uint256 _pid) public view returns (uint256) {
-        UserInfo storage user = userInfo[_pid][msg.sender];
-        if (block.number > user.lastDropBlock) {
-            uint256 rate =
-                (block.number - user.lastDropBlock) * NFT_BASE_DROP_RATE_INC;
-            if (rate > NFT_DROP_RATE_CAP) {
-                rate = NFT_DROP_RATE_CAP;
-            }
-            return rate;
-        }
-        return 0;
     }
 
     // Calculate bonus from level and items. Returns percentage.
@@ -689,13 +762,30 @@ contract FishingMaster is Ownable {
 
     // Internal functions that are view
 
+    // Get NFT Drop rate counter for now.
+    function getNFTDropCounter(uint256 _pid) internal view returns (uint256) {
+        UserInfo storage user = userInfo[_pid][msg.sender];
+        if (block.number > user.lastDropBlock) {
+            uint256 rate =
+                (block.number - user.lastDropBlock) * NFT_BASE_DROP_RATE_INC;
+            if (rate > NFT_DROP_RATE_CAP) {
+                rate = NFT_DROP_RATE_CAP;
+            }
+            return rate;
+        }
+        return 0;
+    }
+
     // Return reward multiplier over the given _from to _to block.
-    function getMultiplier(uint256 _from, uint256 _to, bool isExpToken)
-        internal
-        view
-        returns (uint256)
-    {
-        return _to.sub(_from).mul(isExpToken?EXP_BONUS_MULTIPLIER:MAIN_BONUS_MULTIPLIER);
+    function getMultiplier(
+        uint256 _from,
+        uint256 _to,
+        bool isExpToken
+    ) internal view returns (uint256) {
+        return
+            _to.sub(_from).mul(
+                isExpToken ? EXP_BONUS_MULTIPLIER : MAIN_BONUS_MULTIPLIER
+            );
     }
 
     // Calculate pool pending rewards without checking user debt.
@@ -713,7 +803,8 @@ contract FishingMaster is Ownable {
             totalAllocPoint = totalAllocPointMainToken;
             cakePerBlock = mainTokenPerBlock;
         }
-        uint256 multiplier = getMultiplier(lastRewardBlock, block.number, isExpToken);
+        uint256 multiplier =
+            getMultiplier(lastRewardBlock, block.number, isExpToken);
 
         return
             multiplier.mul(cakePerBlock).mul(allocPoint).div(totalAllocPoint);
@@ -772,6 +863,10 @@ contract FishingMaster is Ownable {
         uint256 attr = ((rand & (2**32)) % itemAttrEffectSize) + 1;
         rand >>= 32;
         uint256 attr_v = (rand & (2**32) % level) + 1;
+        // divide 5 and round up if it is mf
+        if (attr == uint256(ItemAttrEffect.MF_BUFF)) {
+            attr_v = attr_v.add(4).div(5);
+        }
         return (attr | (attr_v << 32));
     }
 
@@ -811,6 +906,8 @@ contract FishingMaster is Ownable {
         return newToken;
     }
 
+    
+
     // Drop roll!
     function checkNFTDrop(
         uint256 _pid,
@@ -823,13 +920,16 @@ contract FishingMaster is Ownable {
             return 0;
         }
 
-        uint256 rate = getNFTDropRate(_pid);
-        userInfo[_pid][msg.sender].lastDropBlock = block.number;
-        uint256 r = randomForNFT(true);
-
-        if (r % NFT_BASE_DROP_RATE_BASE < rate) {
+        if (
+            randomForNFT(true) % NFT_BASE_DROP_RATE_BASE <
+            getNFTDropCounter(_pid)
+                .mul(calculateMFBonus(msg.sender).add(100))
+                .div(100)
+        ) {
+            userInfo[_pid][msg.sender].lastDropBlock = block.number;
             return genRandomNFT(msg.sender, _userLevel);
         }
+        userInfo[_pid][msg.sender].lastDropBlock = block.number;
         return 0;
     }
 
