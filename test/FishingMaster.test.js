@@ -6,7 +6,7 @@ const FishingMaster = artifacts.require('FishingMaster');
 const ItemHelper = artifacts.require('ItemHelper');
 const MockBEP20 = artifacts.require('libs/MockBEP20');
 
-contract('FishingMaster', ([alice, bob, carol, dev, minter]) => {
+contract('FishingMaster', ([alice, bob, carol, dick, dev, minter]) => {
     beforeEach(async () => {
         this.ppx = await YAYAToken.new({ from: minter });
         this.ppy = await PAPAToken.new({ from: minter });
@@ -19,6 +19,7 @@ contract('FishingMaster', ([alice, bob, carol, dev, minter]) => {
 
         // For ppx spending tests
         await this.ppx.mint(carol, '580000000000000000000', { from: minter });
+        await this.ppy.mint(dick, '100', { from: minter });
 
 
         this.chef = await FishingMaster.new(this.ppx.address, this.ppy.address, this.ppe.address, this.itemHelper.address, dev, '1000', '1000','100', { from: minter });
@@ -58,12 +59,12 @@ contract('FishingMaster', ([alice, bob, carol, dev, minter]) => {
       await this.chef.deposit(0, '20', { from: alice });
       await this.chef.withdraw(0, '20', { from: alice });
       // 2000/5700 * 1000 * 1 = 350.8
-      assert.equal((await this.ppx.balanceOf(alice)).toString(), '350');
+      assert.equal((await this.ppx.balanceOf(alice)).toString(), '350877192982456140350');
 
     })
 
 
-    it('deposit/withdraw', async () => {
+    it('deposit/withdraw exp token', async () => {
       await this.chef.add('1000', this.lp1.address, true,true, { from: minter });
       await this.chef.add('1000', this.lp2.address, true,true, { from: minter });
       await this.chef.add('1000', this.lp3.address, true,true, { from: minter });
@@ -76,10 +77,10 @@ contract('FishingMaster', ([alice, bob, carol, dev, minter]) => {
       assert.equal((await this.lp1.balanceOf(alice)).toString(), '1940');
       await this.chef.withdraw(0, '10', { from: alice });
       assert.equal((await this.lp1.balanceOf(alice)).toString(), '1950');
-      // 1000/3000 * 1000 * 4 = 1332 
-      assert.equal((await this.ppx.balanceOf(alice)).toString(), '1332');
+      // 1000/3000 * 1000 * 4 = 1333.333.... 
+      assert.equal((await this.ppx.balanceOf(alice)).toString(), '1333333333333333333332');
       // 1332 /10 
-      assert.equal((await this.ppx.balanceOf(dev)).toString(), '132');
+      assert.equal((await this.ppx.balanceOf(dev)).toString(), '133333333333333333332');
       
       await this.lp1.approve(this.chef.address, '100', { from: bob });
       assert.equal((await this.lp1.balanceOf(bob)).toString(), '2000');
@@ -87,10 +88,59 @@ contract('FishingMaster', ([alice, bob, carol, dev, minter]) => {
       assert.equal((await this.lp1.balanceOf(bob)).toString(), '1950');
       await this.chef.deposit(0, '0', { from: bob });
       // 1000/3000 * 1000 * (50/100) = 166
-      assert.equal((await this.ppx.balanceOf(bob)).toString(), '166');
+      assert.equal((await this.ppx.balanceOf(bob)).toString(), '166666666666666666666');
       await this.chef.emergencyWithdraw(0, { from: bob });
       assert.equal((await this.lp1.balanceOf(bob)).toString(), '2000');
     })
+
+    it('deposit/withdraw main token', async () => {
+        await this.chef.add('1000', this.lp1.address, false,true, { from: minter });
+        await this.chef.add('1000', this.lp2.address, false,true, { from: minter });
+        await this.chef.add('1000', this.lp3.address, false,true, { from: minter });
+  
+        await this.lp1.approve(this.chef.address, '100', { from: alice });
+        await this.chef.deposit(0, '20', { from: alice });
+        await this.chef.deposit(0, '0', { from: alice });
+        await this.chef.deposit(0, '40', { from: alice });
+        await this.chef.deposit(0, '0', { from: alice });
+        assert.equal((await this.lp1.balanceOf(alice)).toString(), '1940');
+        await this.chef.withdraw(0, '10', { from: alice });
+        assert.equal((await this.lp1.balanceOf(alice)).toString(), '1950');
+        // 1000/3000 * 1000 * 4 = 1333.333.... 
+        assert.equal((await this.ppy.balanceOf(alice)).toString(), '1333333333333333333332');
+        // 0
+        assert.equal((await this.ppy.balanceOf(dev)).toString(), '0');
+        
+        await this.lp1.approve(this.chef.address, '100', { from: bob });
+        assert.equal((await this.lp1.balanceOf(bob)).toString(), '2000');
+        await this.chef.deposit(0, '50', { from: bob });
+        assert.equal((await this.lp1.balanceOf(bob)).toString(), '1950');
+        await this.chef.deposit(0, '0', { from: bob });
+        // 1000/3000 * 1000 * (50/100) = 166
+        assert.equal((await this.ppy.balanceOf(bob)).toString(), '166666666666666666666');
+        await this.chef.emergencyWithdraw(0, { from: bob });
+        assert.equal((await this.lp1.balanceOf(bob)).toString(), '2000');
+      })
+
+    it('staking papa/withdraw', async () => {
+        await this.chef.add('1000', this.ppy.address, false,true, { from: minter });
+        await this.chef.add('1000', this.lp2.address, false,true, { from: minter });
+        await this.chef.add('1000', this.lp3.address, false,true, { from: minter });
+  
+        await this.ppy.approve(this.chef.address, '100', { from: dick });
+        await this.chef.deposit(0, '20', { from: dick });
+        await this.chef.deposit(0, '0', { from: dick });
+        await this.chef.deposit(0, '40', { from: dick });
+        await this.chef.deposit(0, '0', { from: dick });
+        // 1000/3000 * 1000 *3 + ....40
+        assert.equal((await this.ppy.balanceOf(dick)).toString(), '1000000000000000000039');
+        await this.chef.withdraw(0, '10', { from: dick });
+        // 1000/3000 * 1000 * 4 = 1333.333....  + ....50
+        assert.equal((await this.ppy.balanceOf(dick)).toString(), '1333333333333333333382');
+        // 0
+        assert.equal((await this.ppy.balanceOf(dev)).toString(), '0');
+        
+      })
 
     
     it('update multiplier', async () => {
@@ -114,17 +164,17 @@ contract('FishingMaster', ([alice, bob, carol, dev, minter]) => {
       await this.chef.deposit(0, '0', { from: bob });
 
       // 1000/3000 * (1 + 100/200 *2) = 666
-      assert.equal((await this.ppx.balanceOf(alice)).toString(), '666');
+      assert.equal((await this.ppx.balanceOf(alice)).toString(), '666666666666666666666');
       // 1000/3000 * (100/200 *2) = 333
-      assert.equal((await this.ppx.balanceOf(bob)).toString(), '333');
+      assert.equal((await this.ppx.balanceOf(bob)).toString(), '333333333333333333333');
 
-      await time.advanceBlockTo('265');
+      await time.advanceBlockTo('365');
 
       await this.chef.deposit(0, '0', { from: alice });
       await this.chef.deposit(0, '0', { from: bob });
 
-      assert.equal((await this.ppx.balanceOf(alice)).toString(), '666');
-      assert.equal((await this.ppx.balanceOf(bob)).toString(), '333');
+      assert.equal((await this.ppx.balanceOf(alice)).toString(), '666666666666666666666');
+      assert.equal((await this.ppx.balanceOf(bob)).toString(), '333333333333333333333');
 
       await this.chef.withdraw(0, '100', { from: alice });
       await this.chef.withdraw(0, '100', { from: bob });

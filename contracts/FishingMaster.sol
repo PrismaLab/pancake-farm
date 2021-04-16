@@ -96,13 +96,18 @@ contract FishingMaster is Ownable {
     // Dev address.
     address public devaddr;
 
-    // Exp tokens (PAPA) created per block.
+    // Exp tokens (PAPA) created per block. 
+    // Note: the unit is 1 token, not the min unit which is 1e-18 token
+    // The end value should be this * multiplier.
     uint256 public expTokenPerBlock;
-    // Main tokens (YAYA) created per block.
+    // Main tokens (YAYA) created per block. 
+    // Note: the unit is 1 token, not the min unit which is 1e-18 token
+    // The end value should be this * multiplier.
     uint256 public mainTokenPerBlock;
-    // Bonus muliplier for early fishers.
-    uint256 public EXP_BONUS_MULTIPLIER = 1;
-    uint256 public MAIN_BONUS_MULTIPLIER = 1;
+    // Multiplier for events or reducing production. Init to 1e18.
+    uint256 public EXP_BONUS_MULTIPLIER;
+    // Multiplier for events or reducing production. Init to 1e18.
+    uint256 public MAIN_BONUS_MULTIPLIER;
     // The block number when tokens mining starts.
     uint256 public startBlock;
 
@@ -162,6 +167,9 @@ contract FishingMaster is Ownable {
         expTokenPerBlock = _expTokenPerBlock;
         mainTokenPerBlock = _mainTokenPerBlock;
         startBlock = _startBlock;
+
+        EXP_BONUS_MULTIPLIER = 10**expToken.decimals();
+        MAIN_BONUS_MULTIPLIER = 10**mainToken.decimals();
 
         totalAllocPointExpToken = 0;
         totalAllocPointMainToken = 0;
@@ -380,7 +388,7 @@ contract FishingMaster is Ownable {
         PoolInfo storage pool = poolInfo[_pid];
         UserInfo storage user = userInfo[_pid][_user];
         uint256 accCakePerShare = pool.accCakePerShare;
-        // uint256 lpSupply = pool.lpToken.balanceOf(address(this));
+
         uint256 lpSupply = pool.totalWeightedValue;
 
         if (block.number > pool.lastRewardBlock && lpSupply != 0) {
@@ -461,7 +469,14 @@ contract FishingMaster is Ownable {
         }
         uint256 lastRewardBlock =
             block.number > startBlock ? block.number : startBlock;
-        totalAllocPointExpToken = totalAllocPointExpToken.add(_allocPoint);
+
+        if (_isExpToken) {
+            totalAllocPointExpToken = totalAllocPointExpToken.add(_allocPoint);
+        }
+        else {
+            totalAllocPointMainToken = totalAllocPointMainToken.add(_allocPoint);
+        }
+        
         poolInfo.push(
             PoolInfo({
                 lpToken: _lpToken,
@@ -514,7 +529,7 @@ contract FishingMaster is Ownable {
         if (block.number <= pool.lastRewardBlock) {
             return;
         }
-        //uint256 lpSupply = pool.lpToken.balanceOf(address(this));
+
         uint256 lpSupply = pool.totalWeightedValue;
         if (lpSupply == 0) {
             pool.lastRewardBlock = block.number;
@@ -529,10 +544,12 @@ contract FishingMaster is Ownable {
             );
 
         if (pool.isExpToken) {
+            // Leave some yaya for dev for events.
             expToken.mint(devaddr, cakeReward.div(10));
             expToken.mint(address(this), cakeReward);
         } else {
-            mainToken.mint(devaddr, cakeReward.div(10));
+            // Main token has a far more restricted eco model, so no mint for dev.
+            // mainToken.mint(devaddr, cakeReward.div(10));
             mainToken.mint(address(this), cakeReward);
         }
 
@@ -658,7 +675,6 @@ contract FishingMaster is Ownable {
     function getUnlockSlotExp(
         uint256 /*_currentSlot*/
     ) public view returns (uint256) {
-        // TODO: Change this！
         return uint256(2500).mul(10**expToken.decimals());
     }
 
@@ -668,7 +684,6 @@ contract FishingMaster is Ownable {
         view
         returns (uint256)
     {
-        // TODO: Change this！
         if (_currentLevel == 0) {
             return 0;
         }
@@ -843,12 +858,16 @@ contract FishingMaster is Ownable {
     ) internal view returns (uint256) {
         uint256 totalAllocPoint = 0;
         uint256 cakePerBlock = 0;
+        
         if (isExpToken) {
             totalAllocPoint = totalAllocPointExpToken;
             cakePerBlock = expTokenPerBlock;
         } else {
             totalAllocPoint = totalAllocPointMainToken;
             cakePerBlock = mainTokenPerBlock;
+        }
+        if (totalAllocPoint == 0) {
+            return 0;
         }
         uint256 multiplier =
             getMultiplier(lastRewardBlock, block.number, isExpToken);
