@@ -18,7 +18,7 @@ module.exports = {
   //  },
   //},
   //
-  
+  plugins: ["solidity-coverage"],
  
   compilers: {
     solc: {

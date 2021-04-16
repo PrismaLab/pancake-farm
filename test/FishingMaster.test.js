@@ -199,8 +199,20 @@ contract('FishingMaster', ([alice, bob, carol, dick, dev, minter]) => {
         await this.chef.mintRandomNFT(alice, { from: minter });
         await this.chef.mintRandomNFT(alice, { from: minter });
         await this.chef.mintRandomNFT(alice, { from: minter });
-        await this.chef.mintRandomNFT(alice, { from: minter });
-        await this.chef.mintRandomNFT(alice, { from: minter });
+
+
+        assert.equal((await this.ppe.ownerOf(1, { from: minter })).valueOf(), alice);
+        assert.equal((await this.ppe.ownerOf(2, { from: minter })).valueOf(), alice);
+        assert.equal((await this.ppe.ownerOf(3, { from: minter })).valueOf(), alice);
+
+        await this.ppe.approve(this.chef.address, '1', { from: alice });
+        await this.ppe.approve(this.chef.address, '2', { from: alice });
+        await this.ppe.approve(this.chef.address, '3', { from: alice });
+
+        await this.chef.reforgeNFT(1,3,2, { from: alice });
+
+        assert.equal((await this.ppe.ownerOf(4, { from: minter })).valueOf(), alice);
+        
        // let info = await this.chef.getNFTInfo(id).toString();
     })
 

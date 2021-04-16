@@ -5,7 +5,7 @@ const FishingMaster = artifacts.require('FishingMaster');
 const MockBEP20 = artifacts.require('libs/MockBEP20');
 const Timelock = artifacts.require('Timelock');
 const PAPAToken = artifacts.require('PAPAToken');
-const EquipmentNFT = artifacts.require('EquipmentNFT');
+const ItemNFT = artifacts.require('ItemNFT');
 const ItemHelper = artifacts.require('ItemHelper');
 
 function encodeParameters(types, values) {
@@ -67,7 +67,7 @@ contract('Timelock', ([alice, bob, carol, dev, minter]) => {
         this.lp1 = await MockBEP20.new('LPToken', 'LP', '10000000000', { from: minter });
         this.lp2 = await MockBEP20.new('LPToken', 'LP', '10000000000', { from: minter });
         this.ppx = await YAYAToken.new({ from: minter });
-        this.ppe = await EquipmentNFT.new({ from: minter });
+        this.ppe = await ItemNFT.new({ from: minter });
         this.itemHelper = await ItemHelper.new({ from: minter });
         this.chef = await FishingMaster.new(this.ppx.address, this.ppy.address, this.ppe.address, this.itemHelper.address, dev, '1000', '1000', '0', { from: alice });
         await this.ppy.transferOwnership(this.chef.address, { from: alice });
