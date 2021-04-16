@@ -3,6 +3,7 @@ const YAYAToken = artifacts.require('YAYAToken');
 const PAPAToken = artifacts.require('PAPAToken');
 const ItemNFT = artifacts.require('ItemNFT');
 const FishingMaster = artifacts.require('FishingMaster');
+const ItemHelper = artifacts.require('ItemHelper');
 const MockBEP20 = artifacts.require('libs/MockBEP20');
 
 contract('FishingMaster', ([alice, bob, carol, dev, minter]) => {
@@ -10,16 +11,17 @@ contract('FishingMaster', ([alice, bob, carol, dev, minter]) => {
         this.ppx = await YAYAToken.new({ from: minter });
         this.ppy = await PAPAToken.new({ from: minter });
         this.ppe = await ItemNFT.new({ from: minter });
+        this.itemHelper = await ItemHelper.new({ from: minter });
         this.lp1 = await MockBEP20.new('LPToken', 'LP1', '1000000', { from: minter });
         this.lp2 = await MockBEP20.new('LPToken', 'LP2', '1000000', { from: minter });
         this.lp3 = await MockBEP20.new('LPToken', 'LP3', '1000000', { from: minter });
 
 
         // For ppx spending tests
-        await this.ppx.mint(carol, 1100, { from: minter });
+        await this.ppx.mint(carol, '580000000000000000000', { from: minter });
 
 
-        this.chef = await FishingMaster.new(this.ppx.address, this.ppy.address, this.ppe.address, dev, '1000', '1000','100', { from: minter });
+        this.chef = await FishingMaster.new(this.ppx.address, this.ppy.address, this.ppe.address, this.itemHelper.address, dev, '1000', '1000','100', { from: minter });
         await this.ppx.transferOwnership(this.chef.address, { from: minter });
         await this.ppy.transferOwnership(this.chef.address, { from: minter });
         await this.ppe.transferOwnership(this.chef.address, { from: minter });
@@ -153,41 +155,41 @@ contract('FishingMaster', ([alice, bob, carol, dev, minter]) => {
     })
 
     it('levelUp', async () => {
-        await this.ppx.approve(this.chef.address, '1100', { from: carol });
+        await this.ppx.approve(this.chef.address, '580000000000000000000', { from: carol });
 
-        assert.equal((await this.ppx.balanceOf(carol)).toString(), '1100');
+        assert.equal((await this.ppx.balanceOf(carol)).toString(), '580000000000000000000');
         assert.equal((await this.chef.getLevel(carol, { from: carol })).valueOf(), '0');
-        assert.equal((await this.chef.getLevelUpExp(0, { from: carol })).valueOf(), '100');
+        assert.equal((await this.chef.getLevelUpExp(0, { from: carol })).valueOf(), '0');
 
         await this.chef.levelUp({ from: carol });
 
-        assert.equal((await this.ppx.balanceOf(carol)).toString(), '1000');
+        assert.equal((await this.ppx.balanceOf(carol)).toString(), '580000000000000000000');
         assert.equal((await this.chef.getLevel(carol, { from: carol })).valueOf(), '1');
-        assert.equal((await this.chef.getLevelUpExp(1, { from: carol })).valueOf(), '150');
+        assert.equal((await this.chef.getLevelUpExp(1, { from: carol })).valueOf(), '20000000000000000000');
 
         await this.chef.levelUp({ from: carol });
 
-        assert.equal((await this.ppx.balanceOf(carol)).toString(), '850');
+        assert.equal((await this.ppx.balanceOf(carol)).toString(), '560000000000000000000');
         assert.equal((await this.chef.getLevel(carol, { from: carol })).valueOf(), '2');
-        assert.equal((await this.chef.getLevelUpExp(2, { from: carol })).valueOf(), '200');
+        assert.equal((await this.chef.getLevelUpExp(2, { from: carol })).valueOf(), '70000000000000000000');
 
         await this.chef.levelUp({ from: carol });
 
-        assert.equal((await this.ppx.balanceOf(carol)).toString(), '650');
+        assert.equal((await this.ppx.balanceOf(carol)).toString(), '490000000000000000000');
         assert.equal((await this.chef.getLevel(carol, { from: carol })).valueOf(), '3');
-        assert.equal((await this.chef.getLevelUpExp(3, { from: carol })).valueOf(), '250');
+        assert.equal((await this.chef.getLevelUpExp(3, { from: carol })).valueOf(), '120000000000000000000');
 
         await this.chef.levelUp({ from: carol });
 
-        assert.equal((await this.ppx.balanceOf(carol)).toString(), '400');
+        assert.equal((await this.ppx.balanceOf(carol)).toString(), '370000000000000000000');
         assert.equal((await this.chef.getLevel(carol, { from: carol })).valueOf(), '4');
-        assert.equal((await this.chef.getLevelUpExp(4, { from: carol })).valueOf(), '300');
+        assert.equal((await this.chef.getLevelUpExp(4, { from: carol })).valueOf(), '170000000000000000000');
 
         await this.chef.levelUp({ from: carol });
 
-        assert.equal((await this.ppx.balanceOf(carol)).toString(), '100');
+        assert.equal((await this.ppx.balanceOf(carol)).toString(), '200000000000000000000');
         assert.equal((await this.chef.getLevel(carol, { from: carol })).valueOf(), '5');
-        assert.equal((await this.chef.getLevelUpExp(5, { from: carol })).valueOf(), '350');
+        assert.equal((await this.chef.getLevelUpExp(5, { from: carol })).valueOf(), '220000000000000000000');
 
         await expectRevert(this.chef.levelUp({ from: carol }), 'No enough balance.');
     })

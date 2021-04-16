@@ -9,6 +9,7 @@ import "./libs/SafeBEP20.sol";
 import "./YAYAToken.sol";
 import "./PAPAToken.sol";
 import "./ItemNFT.sol";
+import "./ItemHelper.sol";
 
 interface IMigratorChef {
     // Perform LP token migration from legacy system to new one.
@@ -33,15 +34,6 @@ interface IMigratorChef {
 contract FishingMaster is Ownable {
     using SafeMath for uint256;
     using SafeBEP20 for IBEP20;
-
-    enum ItemAttrEffect {
-        NONE,
-        ALL_TOKEN_BUFF,
-        EXP_TOKEN_BUFF,
-        MAIN_TOKEN_BUFF,
-        MF_BUFF
-    }
-    uint8 constant itemAttrEffectSize = 4;
 
     // Info of each user.
     struct UserInfo {
@@ -83,7 +75,8 @@ contract FishingMaster is Ownable {
     // Item info, maybe it should belongs to the ItemNFT implementation, but we put it here to have more centralized control.
     struct itemDetail {
         uint256 level; // Item level as well as the level requirement.
-        uint256 template; // Item template for displaying and/or other uses. 0 for pure random item for now. A random master piece will be a true wonder.
+        bool isRandom; // Whether it is random. A random master piece will be a true wonder.
+        uint256 template; // Item template for displaying and/or other uses.
         uint256[6] attr; // Attributes of the item. attr = type(32) | value <<32.
     }
 
@@ -93,6 +86,10 @@ contract FishingMaster is Ownable {
     PAPAToken public mainToken;
     // The ItemToken TOKEN!
     ItemNFT public itemToken;
+
+    // Helper functions for items.
+    // Defined to reduce contract size and provide certain level of upgradability.
+    ItemHelper public itemHelper;
 
     // The migrator contract. It has a lot of power. Can only be set through governance (owner).
     IMigratorChef public migrator;
@@ -120,6 +117,8 @@ contract FishingMaster is Ownable {
 
     // Base NFT price.
     uint256 public RANDOM_NFT_PRICE = 0;
+    // Upgrade NFT price.
+    uint256 public UPGRADE_NFT_PRICE = 0;
 
     // Item details: tokenId => details.
     mapping(uint256 => itemDetail) public itemDetails;
@@ -149,6 +148,7 @@ contract FishingMaster is Ownable {
         YAYAToken _expToken,
         PAPAToken _mainToken,
         ItemNFT _itemToken,
+        ItemHelper _itemHelper,
         address _devaddr,
         uint256 _expTokenPerBlock,
         uint256 _mainTokenPerBlock,
@@ -157,6 +157,7 @@ contract FishingMaster is Ownable {
         expToken = _expToken;
         mainToken = _mainToken;
         itemToken = _itemToken;
+        itemHelper = _itemHelper;
         devaddr = _devaddr;
         expTokenPerBlock = _expTokenPerBlock;
         mainTokenPerBlock = _mainTokenPerBlock;
@@ -188,6 +189,11 @@ contract FishingMaster is Ownable {
         RANDOM_NFT_PRICE = price;
     }
 
+    // Update re-roll price.
+    function updateUpgradeNftPrice(uint256 price) external onlyOwner {
+        UPGRADE_NFT_PRICE = price;
+    }
+
     // Update item drop rates.
     function updateNFTDropRate(
         uint256 base,
@@ -210,10 +216,13 @@ contract FishingMaster is Ownable {
         migrator = _migrator;
     }
 
+    // Set the itemHelper. Can only be called by the owner.
+    function setItemHelper(ItemHelper _itemHelper) external onlyOwner {
+        itemHelper = _itemHelper;
+    }
+
     // Manually mint a random NFT
     function mintRandomNFT(address recv) external onlyOwner {
-        // srand
-        randomForNFT(true);
         genRandomNFT(recv, MAX_LEVEL);
     }
 
@@ -224,11 +233,10 @@ contract FishingMaster is Ownable {
         uint256 _template,
         uint256[6] calldata _attr
     ) external onlyOwner {
-        require(_template != 0, "do not pretent to be random!");
         uint256 newToken = itemToken.mintNft(recv);
         itemDetail storage detail = itemDetails[newToken];
         detail.template = _template;
-
+        detail.isRandom = false;
         detail.level = _level;
         for (uint256 i = 0; i < 6; i += 1) {
             detail.attr[i] = _attr[i];
@@ -250,7 +258,7 @@ contract FishingMaster is Ownable {
             userProfile.invSlot[_slot] = _tokenId;
         } else if (
             _tokenId > 0 &&
-            itemToken.checkOwner(_tokenId, _user) &&
+            itemToken.ownerOf(_tokenId) == _user &&
             detail.level <= userProfile.level
         ) {
             userProfile.invSlot[_slot] = _tokenId;
@@ -261,12 +269,13 @@ contract FishingMaster is Ownable {
     function levelUp() external {
         UserProfileInfo storage userProfile = userProfileInfo[msg.sender];
         uint256 level = userProfile.level;
-        uint256 requiremnt = getLevelUpExp(level);
-        uint256 bal = expToken.balanceOf(msg.sender);
-        require(bal >= requiremnt, "No enough balance.");
-
+        uint256 requirement = getLevelUpExp(level);
+        if (requirement > 0) {
+            uint256 bal = expToken.balanceOf(msg.sender);
+            require(bal >= requirement, "No enough balance.");
+            expToken.burn(msg.sender, requirement);
+        }
         userProfile.level = level.add(1);
-        expToken.burn(msg.sender, requiremnt);
     }
 
     // User pay exp to unlock item .
@@ -284,20 +293,16 @@ contract FishingMaster is Ownable {
         }
     }
 
-    // Buy random NFT with exp!
+    // Buy random NFT with exp! Set price to 0 to disable!
     function buyRandomNFT() external {
         UserProfileInfo storage userProfile = userProfileInfo[msg.sender];
+        require(RANDOM_NFT_PRICE > 0, "Buying NFT not enabled.");
+        uint256 bal = expToken.balanceOf(msg.sender);
+        require(bal >= RANDOM_NFT_PRICE, "No enough balance.");
 
-        if (RANDOM_NFT_PRICE > 0) {
-            uint256 bal = expToken.balanceOf(msg.sender);
-            require(bal >= RANDOM_NFT_PRICE, "No enough balance.");
+        genRandomNFT(msg.sender, userProfile.level);
 
-            // srand
-            randomForNFT(true);
-            genRandomNFT(msg.sender, userProfile.level);
-
-            expToken.burn(msg.sender, RANDOM_NFT_PRICE);
-        }
+        expToken.burn(msg.sender, RANDOM_NFT_PRICE);
     }
 
     // Reforge NFT!
@@ -308,9 +313,9 @@ contract FishingMaster is Ownable {
     ) external {
         UserProfileInfo storage userProfile = userProfileInfo[msg.sender];
 
-        require(itemToken.checkOwner(tokenId1, msg.sender), "Not owner!");
-        require(itemToken.checkOwner(tokenId2, msg.sender), "Not owner!");
-        require(itemToken.checkOwner(tokenId3, msg.sender), "Not owner!");
+        require(itemToken.ownerOf(tokenId1) == msg.sender, "Not owner!");
+        require(itemToken.ownerOf(tokenId2) == msg.sender, "Not owner!");
+        require(itemToken.ownerOf(tokenId3) == msg.sender, "Not owner!");
 
         for (uint8 i = 0; i < 6; i++) {
             if (userProfile.invSlot[i] == 0) {
@@ -321,8 +326,6 @@ contract FishingMaster is Ownable {
             require(userProfile.invSlot[i] != tokenId3, "Item in use!");
         }
 
-        // srand
-        randomForNFT(true);
         genRandomNFT(msg.sender, userProfile.level);
 
         itemToken.burnNft(tokenId1, msg.sender);
@@ -330,13 +333,42 @@ contract FishingMaster is Ownable {
         itemToken.burnNft(tokenId3, msg.sender);
     }
 
+    // Re-roll Attribute!
+    function upgradeNFT(uint256 tokenId, uint256 index) external {
+        UserProfileInfo storage userProfile = userProfileInfo[msg.sender];
+        require(UPGRADE_NFT_PRICE > 0, "Upgrading NFT not enabled.");
+        uint256 bal = expToken.balanceOf(msg.sender);
+        require(bal >= UPGRADE_NFT_PRICE, "No enough balance.");
+
+        require(itemToken.ownerOf(tokenId) == msg.sender, "Not owner!");
+
+        for (uint8 i = 0; i < 6; i++) {
+            if (userProfile.invSlot[i] == 0) {
+                continue;
+            }
+            require(userProfile.invSlot[i] != tokenId, "Item in use!");
+        }
+
+        itemDetail storage detail = itemDetails[tokenId];
+        require(index < 6, "index out of range!");
+        require(detail.attr[index] != 0, "No existing attr!");
+
+        detail.attr[index] = reRollAttr(detail.level, detail.attr[index]);
+        // No longer pure random!
+        detail.isRandom = false;
+        expToken.burn(msg.sender, UPGRADE_NFT_PRICE);
+    }
+
     // External functions that are view
 
     // Drop rate with modifiers, 5 decimal digit.
-    function getNFTDropRate(uint256 _pid) external view returns(uint256) {
-        return getNFTDropCounter(_pid)
-                .mul(calculateMFBonus(msg.sender).add(100))
-                .div(100).mul(1e5).div(NFT_BASE_DROP_RATE_BASE);
+    function getNFTDropRate(uint256 _pid) external view returns (uint256) {
+        return
+            getNFTDropCounter(_pid)
+                .mul(calculateMFBonus(msg.sender, _pid).add(100))
+                .div(100)
+                .mul(1e5)
+                .div(NFT_BASE_DROP_RATE_BASE);
     }
 
     // View function to see pending tokens on frontend.
@@ -623,23 +655,24 @@ contract FishingMaster is Ownable {
     // Public functions that are view
 
     // Get Exp comsumption for unlocking slot.
-    function getUnlockSlotExp(uint256 _currentSlot)
-        public
-        pure
-        returns (uint256)
-    {
+    function getUnlockSlotExp(
+        uint256 /*_currentSlot*/
+    ) public view returns (uint256) {
         // TODO: Change this！
-        return _currentSlot.mul(500);
+        return uint256(2500).mul(10**expToken.decimals());
     }
 
     // Get Exp comsumption for level up.
     function getLevelUpExp(uint256 _currentLevel)
         public
-        pure
+        view
         returns (uint256)
     {
         // TODO: Change this！
-        return _currentLevel.mul(50).add(100);
+        if (_currentLevel == 0) {
+            return 0;
+        }
+        return _currentLevel.mul(50).sub(30).mul(10**expToken.decimals());
     }
 
     // Calculate bonus from level and items. Returns percentage.
@@ -657,7 +690,7 @@ contract FishingMaster is Ownable {
             for (uint8 i = 0; i < userProfile.invSlotNum; i++) {
                 if (
                     userProfile.invSlot[i] > 0 &&
-                    itemToken.checkOwner(userProfile.invSlot[i], _user)
+                    itemToken.ownerOf(userProfile.invSlot[i]) == _user
                 ) {
                     itemDetail storage detail =
                         itemDetails[userProfile.invSlot[i]];
@@ -670,7 +703,11 @@ contract FishingMaster is Ownable {
                                 break;
                             }
                             itemBonus = itemBonus.add(
-                                getExpTokenBonus(detail.attr[j])
+                                getExpTokenBonus(
+                                    detail.attr[j],
+                                    userProfile.level,
+                                    _pid
+                                )
                             );
                         }
                     } else {
@@ -679,7 +716,11 @@ contract FishingMaster is Ownable {
                                 break;
                             }
                             itemBonus = itemBonus.add(
-                                getMainTokenBonus(detail.attr[j])
+                                getMainTokenBonus(
+                                    detail.attr[j],
+                                    userProfile.level,
+                                    _pid
+                                )
                             );
                         }
                     }
@@ -696,7 +737,11 @@ contract FishingMaster is Ownable {
     }
 
     // Get MF bonus
-    function calculateMFBonus(address _user) public view returns (uint256) {
+    function calculateMFBonus(address _user, uint256 _pid)
+        public
+        view
+        returns (uint256)
+    {
         UserProfileInfo storage userProfile = userProfileInfo[_user];
         uint256 itemBonus = 0;
 
@@ -704,7 +749,7 @@ contract FishingMaster is Ownable {
             for (uint8 i = 0; i < userProfile.invSlotNum; i++) {
                 if (
                     userProfile.invSlot[i] > 0 &&
-                    itemToken.checkOwner(userProfile.invSlot[i], _user)
+                    itemToken.ownerOf(userProfile.invSlot[i]) == _user
                 ) {
                     itemDetail storage detail =
                         itemDetails[userProfile.invSlot[i]];
@@ -715,7 +760,9 @@ contract FishingMaster is Ownable {
                         if (detail.attr[j] == 0) {
                             break;
                         }
-                        itemBonus = itemBonus.add(getMFBonus(detail.attr[j]));
+                        itemBonus = itemBonus.add(
+                            getMFBonus(detail.attr[j], userProfile.level, _pid)
+                        );
                     }
                 }
             }
@@ -818,56 +865,46 @@ contract FishingMaster is Ownable {
     }
 
     // Decode attr and check if it has exp token bonus to given pool.
-    function getExpTokenBonus(uint256 attr) internal pure returns (uint256) {
-        uint256 attr_type = attr & (2**32);
-
-        if (
-            attr_type == uint256(ItemAttrEffect.ALL_TOKEN_BUFF) ||
-            attr_type == uint256(ItemAttrEffect.EXP_TOKEN_BUFF)
-        ) {
-            return (attr_type >> 32);
-        }
-        return 0;
+    function getExpTokenBonus(
+        uint256 attr,
+        uint256 level,
+        uint256 pid
+    ) internal view returns (uint256) {
+        return itemHelper.getExpTokenBonus(attr, level, pid);
     }
 
     // Decode attr and check if it has main token bonus to given pool.
-    function getMainTokenBonus(uint256 attr) internal pure returns (uint256) {
-        uint256 attr_type = attr & (2**32);
-
-        if (
-            attr_type == uint256(ItemAttrEffect.ALL_TOKEN_BUFF) ||
-            attr_type == uint256(ItemAttrEffect.MAIN_TOKEN_BUFF)
-        ) {
-            return (attr_type >> 32);
-        }
-
-        return 0;
+    function getMainTokenBonus(
+        uint256 attr,
+        uint256 level,
+        uint256 pid
+    ) internal view returns (uint256) {
+        return itemHelper.getMainTokenBonus(attr, level, pid);
     }
 
     // Decode attr and check if it has mf bonus to given pool.
-    function getMFBonus(uint256 attr) internal pure returns (uint256) {
-        uint256 attr_type = attr & (2**32);
-
-        if (attr_type == uint256(ItemAttrEffect.MF_BUFF)) {
-            return (attr_type >> 32);
-        }
-        return 0;
+    function getMFBonus(
+        uint256 attr,
+        uint256 level,
+        uint256 pid
+    ) internal view returns (uint256) {
+        return itemHelper.getMFBonus(attr, level, pid);
     }
 
     // Private functions
     // Mainly for local helper functions
 
-    // Generate a single item attr with a given random seed.
+    // Generate a single item via itemHelper
     function genAttr(uint256 level) private returns (uint256) {
-        uint256 rand = randomForNFT(false);
-        uint256 attr = ((rand & (2**32)) % itemAttrEffectSize) + 1;
-        rand >>= 32;
-        uint256 attr_v = (rand & (2**32) % level) + 1;
-        // divide 5 and round up if it is mf
-        if (attr == uint256(ItemAttrEffect.MF_BUFF)) {
-            attr_v = attr_v.add(4).div(5);
-        }
-        return (attr | (attr_v << 32));
+        return itemHelper.genAttr(level, msg.sender);
+    }
+
+    // Generate a single item via itemHelper
+    function reRollAttr(uint256 ilevel, uint256 oldAttr)
+        private
+        returns (uint256)
+    {
+        return itemHelper.reRollAttr(ilevel, oldAttr, msg.sender);
     }
 
     // Generate a random NFT with a given random seed.
@@ -877,36 +914,32 @@ contract FishingMaster is Ownable {
     {
         uint256 newToken = itemToken.mintNft(recv);
         itemDetail storage detail = itemDetails[newToken];
-        detail.template = 0;
 
         emit MintNFT(recv, newToken);
 
-        uint256 rand = randomForNFT(false);
+        // Pure random function version 0
+        detail.template = rand(10);
+        detail.isRandom = true;
+        // We do not plan to change the level logic so we leave it here.
         uint256 minLevel = 0;
         if (userLevel > 10) {
             minLevel = userLevel.sub(10);
         }
         uint256 maxLevel = MAX_LEVEL.add(10);
-        uint256 level = 0;
-        if (maxLevel > minLevel) {
-            level = (rand % (maxLevel - minLevel)).add(minLevel);
-        }
-        level = level - (level % 5) + 5;
 
-        detail.level = level;
+        uint256 level = rand(minLevel, maxLevel);
+        detail.level = level - (level % 5) + 5;
 
+        // genAttr actually will ask itemHelper to generate attributes.
         for (uint256 i = 0; i < 6; i++) {
-            detail.attr[i] = genAttr(level);
-            rand = randomForNFT(false);
-            if (rand % 256 >= 2) {
+            detail.attr[i] = genAttr(detail.level);
+            if (rand(256) >= 2) {
                 break;
             }
         }
 
         return newToken;
     }
-
-    
 
     // Drop roll!
     function checkNFTDrop(
@@ -921,9 +954,9 @@ contract FishingMaster is Ownable {
         }
 
         if (
-            randomForNFT(true) % NFT_BASE_DROP_RATE_BASE <
+            rand(NFT_BASE_DROP_RATE_BASE) <
             getNFTDropCounter(_pid)
-                .mul(calculateMFBonus(msg.sender).add(100))
+                .mul(calculateMFBonus(msg.sender, _pid).add(100))
                 .div(100)
         ) {
             userInfo[_pid][msg.sender].lastDropBlock = block.number;
@@ -933,27 +966,21 @@ contract FishingMaster is Ownable {
         return 0;
     }
 
-    // PRNG for NFT related functions.
-    // We choose not to use an oracle for randomness in the NFT case for the following reasons:
-    // The lagest danger of such PRNG is the case that a miner may reject certain result.
-    // However, in the current design, a user can always have another roll several hours later.
-    // Therefore he will loss gas fee for rejecting a block and gain almost nothing.
-    function randomForNFT(bool reset) private returns (uint256) {
-        if (reset) {
-            randomState[msg.sender] = uint256(
-                keccak256(
-                    abi.encodePacked(
-                        block.difficulty,
-                        block.timestamp,
-                        msg.sender
-                    )
-                )
-            );
-        } else {
-            randomState[msg.sender] = uint256(
-                keccak256(abi.encodePacked(randomState[msg.sender]))
-            );
-        }
-        return randomState[msg.sender];
+    // Random uint256 using helper functions
+    function rand() private returns (uint256) {
+        // Helper will do sanity check.
+        return itemHelper.rand(msg.sender);
+    }
+
+    // Random mod _mod using helper functions
+    function rand(uint256 _mod) private returns (uint256) {
+        // Helper will do sanity check.
+        return itemHelper.randMod(_mod, msg.sender);
+    }
+
+    // Random in [lower, upper] using helper functions
+    function rand(uint256 _lower, uint256 _upper) private returns (uint256) {
+        // Helper will do sanity check.
+        return itemHelper.rand(_lower, _upper, msg.sender);
     }
 }

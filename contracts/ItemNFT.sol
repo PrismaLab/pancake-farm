@@ -3,9 +3,9 @@ pragma solidity ^0.8.0;
 
 import "@openzeppelin/contracts/utils/Counters.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
-import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
+import "@openzeppelin/contracts/token/ERC721/extensions/ERC721Enumerable.sol";
 
-contract ItemNFT is ERC721, Ownable {
+contract ItemNFT is ERC721Enumerable, Ownable {
     using Counters for Counters.Counter;
     Counters.Counter private _tokenIds;
 
@@ -25,11 +25,4 @@ contract ItemNFT is ERC721, Ownable {
         _burn(_tokenId);
     }
 
-    function checkOwner(uint256 _tokenId, address _user)
-        public
-        view
-        returns (bool)
-    {
-        return (ownerOf(_tokenId) == _user);
-    }
 }
