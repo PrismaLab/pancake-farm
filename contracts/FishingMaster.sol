@@ -204,8 +204,8 @@ contract FishingMaster is Ownable {
 
     // Update item drop rates.
     function updateNFTDropRate(
-        uint256 base,
         uint256 inc,
+        uint256 base,
         uint256 cap
     ) external onlyOwner {
         NFT_BASE_DROP_RATE_INC = inc;
@@ -253,24 +253,26 @@ contract FishingMaster is Ownable {
 
     // Equip an item to a slot.
     function equipNFT(
-        address _user,
         uint256 _slot,
         uint256 _tokenId
     ) external {
-        UserProfileInfo storage userProfile = userProfileInfo[_user];
+        UserProfileInfo storage userProfile = userProfileInfo[msg.sender];
         itemDetail storage detail = itemDetails[_tokenId];
-        if (_slot > userProfile.invSlotNum || _slot > 6) {
-            return;
-        }
+        require(_slot < userProfile.invSlotNum && _slot < 6, "invalid slot");
+
         if (_tokenId == 0) {
-            userProfile.invSlot[_slot] = _tokenId;
-        } else if (
-            _tokenId > 0 &&
-            itemToken.ownerOf(_tokenId) == _user &&
-            detail.level <= userProfile.level
-        ) {
-            userProfile.invSlot[_slot] = _tokenId;
-        }
+            require(_tokenId != userProfile.invSlot[_slot], "already empty");
+        } else{
+            require(itemToken.ownerOf(_tokenId) == msg.sender, "not item owner");
+            require(detail.level <= userProfile.level, "no enough level");
+            for (uint8 i = 0; i < 6; i ++) { 
+                // case 1: already equipped in other slot.
+                // case 2: equip again in same slot for whatever reason.
+                // It should always be fine to return here.
+                require(_tokenId != userProfile.invSlot[i], "already equipped");
+            }
+        } 
+        userProfile.invSlot[_slot] = _tokenId;
     }
 
     // User pay exp to levelup.
@@ -291,7 +293,8 @@ contract FishingMaster is Ownable {
         UserProfileInfo storage userProfile = userProfileInfo[msg.sender];
         uint256 slotNum = userProfile.invSlotNum;
         require(slotNum < 6, "Maximum slot unlocked.");
-
+        require(userProfile.level >= getUnlockSlotLevelRequirement(slotNum), "No enough level.");
+    
         uint256 requiremnt = getUnlockSlotExp(slotNum);
         userProfile.invSlotNum = slotNum.add(1);
         if (requiremnt > 0) {
@@ -373,20 +376,21 @@ contract FishingMaster is Ownable {
     function getNFTDropRate(uint256 _pid) external view returns (uint256) {
         return
             getNFTDropCounter(_pid)
-                .mul(calculateMFBonus(msg.sender, _pid).add(100))
+                .mul(calculateMFBonus(_pid).add(100))
                 .div(100)
                 .mul(1e5)
                 .div(NFT_BASE_DROP_RATE_BASE);
     }
 
     // View function to see pending tokens on frontend.
-    function pendingCake(uint256 _pid, address _user)
+    function pendingCake(uint256 _pid)
         external
         view
         returns (uint256)
     {
+        require(_pid < poolInfo.length, "invalid pid");
         PoolInfo storage pool = poolInfo[_pid];
-        UserInfo storage user = userInfo[_pid][_user];
+        UserInfo storage user = userInfo[_pid][msg.sender];
         uint256 accCakePerShare = pool.accCakePerShare;
 
         uint256 lpSupply = pool.totalWeightedValue;
@@ -411,24 +415,24 @@ contract FishingMaster is Ownable {
     }
 
     // Query user inventory info.
-    function getInventory(address _user)
+    function getInventory()
         external
         view
         returns (uint256[6] memory)
     {
-        UserProfileInfo storage userProfile = userProfileInfo[_user];
+        UserProfileInfo storage userProfile = userProfileInfo[msg.sender];
         return userProfile.invSlot;
     }
 
     // Query current level.
-    function getLevel(address _user) external view returns (uint256) {
-        UserProfileInfo storage userProfile = userProfileInfo[_user];
+    function getLevel() external view returns (uint256) {
+        UserProfileInfo storage userProfile = userProfileInfo[msg.sender];
         return userProfile.level;
     }
 
     // Query max slot number.
-    function getInvSlotNum(address _user) external view returns (uint256) {
-        UserProfileInfo storage userProfile = userProfileInfo[_user];
+    function getInvSlotNum() external view returns (uint256) {
+        UserProfileInfo storage userProfile = userProfileInfo[msg.sender];
         return userProfile.invSlotNum;
     }
 
@@ -447,6 +451,7 @@ contract FishingMaster is Ownable {
     // Migrate lp token to another lp contract. Can be called by anyone. We trust that migrator contract is good.
     function migrate(uint256 _pid) public {
         require(address(migrator) != address(0), "migrate: no migrator");
+        require(_pid < poolInfo.length, "invalid pid");
         PoolInfo storage pool = poolInfo[_pid];
         IBEP20 lpToken = pool.lpToken;
         uint256 bal = lpToken.balanceOf(address(this));
@@ -498,6 +503,7 @@ contract FishingMaster is Ownable {
         if (_withUpdate) {
             massUpdatePools();
         }
+        require(_pid < poolInfo.length, "invalid pid");
         PoolInfo storage pool = poolInfo[_pid];
         uint256 prevAllocPoint = pool.allocPoint;
         pool.allocPoint = _allocPoint;
@@ -525,6 +531,7 @@ contract FishingMaster is Ownable {
 
     // Update reward variables of the given pool to be up-to-date.
     function updatePool(uint256 _pid) public {
+        require(_pid < poolInfo.length, "invalid pid");
         PoolInfo storage pool = poolInfo[_pid];
         if (block.number <= pool.lastRewardBlock) {
             return;
@@ -561,6 +568,7 @@ contract FishingMaster is Ownable {
 
     // Deposit LP tokens to FishingMaster for token allocation.
     function deposit(uint256 _pid, uint256 _amount) public {
+        require(_pid < poolInfo.length, "invalid pid");
         PoolInfo storage pool = poolInfo[_pid];
         UserInfo storage user = userInfo[_pid][msg.sender];
         UserProfileInfo storage userProfile = userProfileInfo[msg.sender];
@@ -593,7 +601,7 @@ contract FishingMaster is Ownable {
         uint256 oldWeight = user.weight;
         user.weight = user
             .amount
-            .mul((100 + calculateWeightBonus(address(msg.sender), _pid)))
+            .mul((100 + calculateWeightBonus(_pid)))
             .div(100);
 
         pool.totalWeightedValue = pool.totalWeightedValue.sub(oldWeight).add(
@@ -616,6 +624,7 @@ contract FishingMaster is Ownable {
 
     // Withdraw LP tokens from FishingMaster.
     function withdraw(uint256 _pid, uint256 _amount) public {
+        require(_pid < poolInfo.length, "invalid pid");
         PoolInfo storage pool = poolInfo[_pid];
         UserInfo storage user = userInfo[_pid][msg.sender];
         UserProfileInfo storage userProfile = userProfileInfo[msg.sender];
@@ -642,7 +651,7 @@ contract FishingMaster is Ownable {
         uint256 oldWeight = user.weight;
         user.weight = user
             .amount
-            .mul((100 + calculateWeightBonus(address(msg.sender), _pid)))
+            .mul((100 + calculateWeightBonus(_pid)))
             .div(100);
 
         pool.totalWeightedValue = pool.totalWeightedValue.sub(oldWeight).add(
@@ -661,6 +670,7 @@ contract FishingMaster is Ownable {
 
     // Withdraw without caring about rewards. EMERGENCY ONLY.
     function emergencyWithdraw(uint256 _pid) public {
+        require(_pid < poolInfo.length, "invalid pid");
         PoolInfo storage pool = poolInfo[_pid];
         UserInfo storage user = userInfo[_pid][msg.sender];
         pool.lpToken.safeTransfer(address(msg.sender), user.amount);
@@ -673,9 +683,52 @@ contract FishingMaster is Ownable {
 
     // Get Exp comsumption for unlocking slot.
     function getUnlockSlotExp(
-        uint256 /*_currentSlot*/
+        uint256 _currentSlot
     ) public view returns (uint256) {
-        return uint256(2500).mul(10**expToken.decimals());
+        if (_currentSlot == 0) {
+            return 0;
+        }
+        else if (_currentSlot == 1) {
+            return uint256(2500).mul(10**expToken.decimals());
+        }
+        else if (_currentSlot == 2) {
+            return uint256(3800).mul(10**expToken.decimals());
+        }
+        else if (_currentSlot == 3) {
+            return uint256(5100).mul(10**expToken.decimals());
+        }
+        else if (_currentSlot == 4) {
+            return uint256(15400).mul(10**expToken.decimals());
+        }
+        else if (_currentSlot == 5) {
+            return uint256(40700).mul(10**expToken.decimals());
+        }
+        return 0;
+    }
+
+    // Get Exp comsumption for unlocking slot.
+    function getUnlockSlotLevelRequirement(
+        uint256 _currentSlot
+    ) public pure returns (uint256) {
+        if (_currentSlot == 0) {
+            return 0;
+        }
+        else if (_currentSlot == 1) {
+            return 21;
+        }
+        else if (_currentSlot == 2) {
+            return 31;
+        }
+        else if (_currentSlot == 3) {
+            return 41;
+        }
+        else if (_currentSlot == 4) {
+            return 51;
+        }
+        else if (_currentSlot == 5) {
+            return 61;
+        }
+        return 0;
     }
 
     // Get Exp comsumption for level up.
@@ -691,12 +744,13 @@ contract FishingMaster is Ownable {
     }
 
     // Calculate bonus from level and items. Returns percentage.
-    function calculateWeightBonus(address _user, uint256 _pid)
+    function calculateWeightBonus(uint256 _pid)
         public
         view
         returns (uint256)
     {
-        UserProfileInfo storage userProfile = userProfileInfo[_user];
+        require(_pid < poolInfo.length, "invalid pid");
+        UserProfileInfo storage userProfile = userProfileInfo[msg.sender];
         PoolInfo storage pool = poolInfo[_pid];
 
         uint256 itemBonus = 100;
@@ -705,7 +759,7 @@ contract FishingMaster is Ownable {
             for (uint8 i = 0; i < userProfile.invSlotNum; i++) {
                 if (
                     userProfile.invSlot[i] > 0 &&
-                    itemToken.ownerOf(userProfile.invSlot[i]) == _user
+                    itemToken.ownerOf(userProfile.invSlot[i]) == msg.sender
                 ) {
                     itemDetail storage detail =
                         itemDetails[userProfile.invSlot[i]];
@@ -752,19 +806,19 @@ contract FishingMaster is Ownable {
     }
 
     // Get MF bonus
-    function calculateMFBonus(address _user, uint256 _pid)
+    function calculateMFBonus(uint256 _pid)
         public
         view
         returns (uint256)
     {
-        UserProfileInfo storage userProfile = userProfileInfo[_user];
+        UserProfileInfo storage userProfile = userProfileInfo[msg.sender];
         uint256 itemBonus = 0;
 
         if (userProfile.invSlotNum <= 6) {
             for (uint8 i = 0; i < userProfile.invSlotNum; i++) {
                 if (
                     userProfile.invSlot[i] > 0 &&
-                    itemToken.ownerOf(userProfile.invSlot[i]) == _user
+                    itemToken.ownerOf(userProfile.invSlot[i]) == msg.sender
                 ) {
                     itemDetail storage detail =
                         itemDetails[userProfile.invSlot[i]];
@@ -975,7 +1029,7 @@ contract FishingMaster is Ownable {
         if (
             rand(NFT_BASE_DROP_RATE_BASE) <
             getNFTDropCounter(_pid)
-                .mul(calculateMFBonus(msg.sender, _pid).add(100))
+                .mul(calculateMFBonus(_pid).add(100))
                 .div(100)
         ) {
             userInfo[_pid][msg.sender].lastDropBlock = block.number;
