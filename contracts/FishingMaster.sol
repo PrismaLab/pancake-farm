@@ -42,8 +42,8 @@ contract FishingMaster is Ownable {
         uint256 rewardDebt; // Reward debt. See explanation below.
         uint256 lastDropBlock; // Last block when a item drop check is rolled.
 
-        // Ispired by PancakeSwap, so we kept the name accCakePerShare :)
-        // We do some fancy math here. Basically, any point in time, the amount of Tokens
+        // Calculation algorithm is ispired by PancakeSwap, so we kept the name accCakePerShare :)
+        // From pancake: We do some fancy math here. Basically, any point in time, the amount of Tokens
         // entitled to a user but is pending to be distributed is:
         //
         //   pending reward = (user.amount * pool.accCakePerShare) - user.rewardDebt
