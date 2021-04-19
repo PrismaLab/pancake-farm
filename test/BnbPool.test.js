@@ -1,18 +1,18 @@
 const { expectRevert, time } = require('@openzeppelin/test-helpers');
 const { assert } = require('chai');
 const YAYAToken = artifacts.require('YAYAToken');
-const BnbStaking = artifacts.require('BnbStaking');
-const MockBEP20 = artifacts.require('libs/MockBEP20');
-const WBNB = artifacts.require('libs/WBNB');
+const BnbPool = artifacts.require('BnbPool');
+const MockBEP20 = artifacts.require('testlibs/MockBEP20');
+const WBNB = artifacts.require('testlibs/WBNB');
 
-contract('BnbStaking.......', async ([alice, bob, admin, dev, minter]) => {
+contract('BnbPool.......', async ([alice, bob, admin, dev, minter]) => {
   beforeEach(async () => {
     this.rewardToken = await YAYAToken.new({ from: minter });
     this.lpToken = await MockBEP20.new('LPToken', 'LP1', '1000000', {
       from: minter,
     });
     this.wBNB = await WBNB.new({ from: minter });
-    this.bnbChef = await BnbStaking.new(
+    this.bnbChef = await BnbPool.new(
       this.wBNB.address,
       this.rewardToken.address,
       1000,

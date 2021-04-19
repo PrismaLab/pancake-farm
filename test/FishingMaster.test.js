@@ -4,7 +4,7 @@ const PAPAToken = artifacts.require('PAPAToken');
 const ItemNFT = artifacts.require('ItemNFT');
 const FishingMaster = artifacts.require('FishingMaster');
 const ItemHelper = artifacts.require('ItemHelper');
-const MockBEP20 = artifacts.require('libs/MockBEP20');
+const MockBEP20 = artifacts.require('testlibs/MockBEP20');
 
 contract('FishingMaster', ([alice, bob, carol, dick, dev, minter]) => {
     beforeEach(async () => {

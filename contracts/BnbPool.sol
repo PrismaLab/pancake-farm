@@ -17,7 +17,7 @@ interface IWBNB {
     function withdraw(uint256) external;
 }
 
-contract BnbStaking is Ownable {
+contract BnbPool is Ownable {
     using SafeMath for uint256;
     using SafeBEP20 for IBEP20;
 

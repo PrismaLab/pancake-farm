@@ -3,14 +3,14 @@
 // https://github.com/sc-forks/solidity-coverage/blob/master/HARDHAT_README.md#usage
 
 module.exports = {
+    // Skip third-party code and standard token implementation.
   skipFiles: [
     "libs",
-    "libs",
-    "libs",
+    "testlibs",
+    "utils",
     "PAPAToken.sol",
     "YAYAToken.sol",
-    "Timelock.sol"
   ],
-  measureStatementCoverage: false,
+  measureStatementCoverage: true,
   measureFunctionCoverage: true,
 };
