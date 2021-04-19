@@ -17,6 +17,9 @@ interface IWBNB {
     function withdraw(uint256) external;
 }
 
+// Seperate contract is required for each non-papaya token pool.
+// We take this minimum contract from pancake.
+// We might integrate itemNFT related functions to it in the future.
 contract BnbPool is Ownable {
     using SafeMath for uint256;
     using SafeBEP20 for IBEP20;
