@@ -27,13 +27,13 @@ contract ItemHelper {
         uint256, /*level*/
         uint256 /*pid*/
     ) public pure returns (uint256) {
-        uint256 attr_type = attr & (2**32);
+        uint256 attr_type = attr % (2**32);
 
         if (
             attr_type == uint256(ItemAttrEffect.ALL_TOKEN_BUFF) ||
             attr_type == uint256(ItemAttrEffect.EXP_TOKEN_BUFF)
         ) {
-            return (attr_type >> 32);
+            return (attr >> 32);
         }
         return 0;
     }
@@ -44,13 +44,13 @@ contract ItemHelper {
         uint256, /*level*/
         uint256 /*pid*/
     ) public pure returns (uint256) {
-        uint256 attr_type = attr & (2**32);
+        uint256 attr_type = attr % (2**32);
 
         if (
             attr_type == uint256(ItemAttrEffect.ALL_TOKEN_BUFF) ||
             attr_type == uint256(ItemAttrEffect.MAIN_TOKEN_BUFF)
         ) {
-            return (attr_type >> 32);
+            return (attr >> 32);
         }
 
         return 0;
@@ -62,20 +62,23 @@ contract ItemHelper {
         uint256, /*level*/
         uint256 /*pid*/
     ) public pure returns (uint256) {
-        uint256 attr_type = attr & (2**32);
+        uint256 attr_type = attr % (2**32);
 
         if (attr_type == uint256(ItemAttrEffect.MF_BUFF)) {
-            return (attr_type >> 32);
+            return (attr >> 32);
         }
         return 0;
     }
 
     // Generate a single attr.
     function genAttr(uint256 level, address _sender) public returns (uint256) {
+        if (level == 0) {
+            level = 1;
+        }
         uint256 r = rand(_sender);
-        uint256 attr = ((r & (2**32)) % itemAttrEffectSize) + 1;
+        uint256 attr = ((r % (2**32)) % itemAttrEffectSize) + 1;
         r >>= 32;
-        uint256 attr_v = (r & (2**32) % level) + 1;
+        uint256 attr_v = (r % (2**32) % level) + 1;
         // divide 5 and round up if it is mf
         if (attr == uint256(ItemAttrEffect.MF_BUFF)) {
             attr_v = attr_v.add(4).div(5);
@@ -89,9 +92,12 @@ contract ItemHelper {
         uint256 oldAttr,
         address _sender
     ) public returns (uint256) {
+        if (level == 0) {
+            level = 1;
+        }
         uint256 r = rand(_sender);
-        uint256 attr = oldAttr & (2**32);
-        uint256 attr_v = (r & (2**32) % level) + 1;
+        uint256 attr = oldAttr % (2**32);
+        uint256 attr_v = (r % (2**32) % level) + 1;
         // divide 5 and round up if it is mf
         if (attr == uint256(ItemAttrEffect.MF_BUFF)) {
             attr_v = attr_v.add(4).div(5);
@@ -105,7 +111,7 @@ contract ItemHelper {
     // The lagest danger of such PRNG is the case that a miner may reject certain result.
     // However, in the current design, a user can always have another roll several hours later.
     // Therefore he will loss gas fee for rejecting a block and gain almost nothing.
-    function rand(address _sender) public returns (uint256) {
+    function rand(address _sender) internal returns (uint256) {
         // increase nonce
         randNonce++;
         return

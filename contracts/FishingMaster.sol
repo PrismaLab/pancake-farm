@@ -10,19 +10,7 @@ import "./YAYAToken.sol";
 import "./PAPAToken.sol";
 import "./ItemNFT.sol";
 import "./ItemHelper.sol";
-
-interface IMigratorChef {
-    // Perform LP token migration from legacy system to new one.
-    // Take the current LP token address and return the new LP token address.
-    // Migrator should have full access to the caller's LP token.
-    // Return the new LP token address.
-    //
-    // XXX Migrator must have allowance access to legacy LP tokens.
-    // New system must mint EXACTLY the same amount of LP tokens or
-    // else something bad will haitemTokenn. Traditional Swap does not
-    // do that so be careful!
-    function migrate(IBEP20 token) external returns (IBEP20);
-}
+import "./libs/IMigratorMaster.sol";
 
 // FishingMaster is the master of the PAPAYA Swap. He can make PAPA YAYA and ITemNFT token and he is a fair guy.
 //
@@ -92,7 +80,7 @@ contract FishingMaster is Ownable {
     ItemHelper public itemHelper;
 
     // The migrator contract. It has a lot of power. Can only be set through governance (owner).
-    IMigratorChef public migrator;
+    IMigratorMaster public migrator;
     // Dev address.
     address public devaddr;
 
@@ -220,7 +208,7 @@ contract FishingMaster is Ownable {
     }
 
     // Set the migrator contract. Can only be called by the owner.
-    function setMigrator(IMigratorChef _migrator) external onlyOwner {
+    function setMigrator(IMigratorMaster _migrator) external onlyOwner {
         migrator = _migrator;
     }
 
@@ -339,9 +327,9 @@ contract FishingMaster is Ownable {
 
         genRandomNFT(msg.sender, userProfile.level);
 
-        itemToken.burnNft(tokenId1, msg.sender);
-        itemToken.burnNft(tokenId2, msg.sender);
-        itemToken.burnNft(tokenId3, msg.sender);
+        itemToken.burnNft(tokenId1);
+        itemToken.burnNft(tokenId2);
+        itemToken.burnNft(tokenId3);
     }
 
     // Re-roll Attribute!
@@ -703,6 +691,8 @@ contract FishingMaster is Ownable {
         else if (_currentSlot == 5) {
             return uint256(40700).mul(10**expToken.decimals());
         }
+        // Internal calls should already guarded against slot >= 6 cases.
+        // It should be fine to return 0 to external calls (to save some  error handling code) as this is just a view.
         return 0;
     }
 
@@ -728,6 +718,8 @@ contract FishingMaster is Ownable {
         else if (_currentSlot == 5) {
             return 61;
         }
+        // Internal calls should already guarded against slot >= 6 cases.
+        // It should be fine to return 0 to external calls (to save some error handling code) as this is just a view.
         return 0;
     }
 
@@ -998,7 +990,7 @@ contract FishingMaster is Ownable {
         if (userLevel > 10) {
             minLevel = userLevel.sub(10);
         }
-        uint256 maxLevel = MAX_LEVEL.add(10);
+        uint256 maxLevel = userLevel.add(10);
 
         uint256 level = rand(minLevel, maxLevel);
         detail.level = level - (level % 5) + 5;
@@ -1037,12 +1029,6 @@ contract FishingMaster is Ownable {
         }
         userInfo[_pid][msg.sender].lastDropBlock = block.number;
         return 0;
-    }
-
-    // Random uint256 using helper functions
-    function rand() private returns (uint256) {
-        // Helper will do sanity check.
-        return itemHelper.rand(msg.sender);
     }
 
     // Random mod _mod using helper functions

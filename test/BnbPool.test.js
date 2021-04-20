@@ -44,6 +44,12 @@ contract('BnbPool.......', async ([alice, bob, admin, dev, minter]) => {
     );
     await this.bnbChef.emergencyRewardWithdraw(1000, { from: minter });
     assert.equal((await this.bnbChef.pendingReward(bob)).toString(), '1399');
+
+    // Go through some corner branches.
+    await this.bnbChef.deposit({ from: alice, value: 0 });
+    await this.bnbChef.deposit({ from: alice, value: 0 });
+    await this.bnbChef.withdraw('0', { from: alice });
+
   });
 
   it('should block man who in blanklist', async () => {

@@ -160,8 +160,8 @@ contract BnbPool is Ownable {
     }
 
     // Update reward variables of the given pool to be up-to-date.
-    function updatePool(uint256 _pid) public {
-        PoolInfo storage pool = poolInfo[_pid];
+    function updatePool() public {
+        PoolInfo storage pool = poolInfo[0];
         if (block.number <= pool.lastRewardBlock) {
             return;
         }
@@ -180,7 +180,7 @@ contract BnbPool is Ownable {
         );
         pool.lastRewardBlock = block.number;
     }
-
+/*
     // Update reward variables for all pools. Be careful of gas spending!
     function massUpdatePools() public {
         uint256 length = poolInfo.length;
@@ -188,7 +188,7 @@ contract BnbPool is Ownable {
             updatePool(pid);
         }
     }
-
+*/
     // Stake tokens to SmartChef
     function deposit() public payable {
         PoolInfo storage pool = poolInfo[0];
@@ -197,7 +197,7 @@ contract BnbPool is Ownable {
         require(user.amount.add(msg.value) <= limitAmount, "exceed the top");
         require(!user.inBlackList, "in black list");
 
-        updatePool(0);
+        updatePool();
         if (user.amount > 0) {
             uint256 pending =
                 user.amount.mul(pool.accCakePerShare).div(1e12).sub(
@@ -228,7 +228,7 @@ contract BnbPool is Ownable {
         PoolInfo storage pool = poolInfo[0];
         UserInfo storage user = userInfo[msg.sender];
         require(user.amount >= _amount, "withdraw: not good");
-        updatePool(0);
+        updatePool();
         uint256 pending =
             user.amount.mul(pool.accCakePerShare).div(1e12).sub(
                 user.rewardDebt

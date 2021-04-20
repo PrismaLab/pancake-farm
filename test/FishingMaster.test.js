@@ -1,3 +1,4 @@
+const { BigNumber } = require('@ethersproject/bignumber');
 const { expectRevert, time } = require('@openzeppelin/test-helpers');
 const YAYAToken = artifacts.require('YAYAToken');
 const PAPAToken = artifacts.require('PAPAToken');
@@ -6,7 +7,7 @@ const FishingMaster = artifacts.require('FishingMaster');
 const ItemHelper = artifacts.require('ItemHelper');
 const MockBEP20 = artifacts.require('testlibs/MockBEP20');
 
-contract('FishingMaster', ([alice, bob, carol, dick, dev, minter]) => {
+contract('FishingMaster', ([alice, bob, carol, dick, eva, dev, minter]) => {
     beforeEach(async () => {
         this.ppx = await YAYAToken.new({ from: minter });
         this.ppy = await PAPAToken.new({ from: minter });
@@ -19,6 +20,7 @@ contract('FishingMaster', ([alice, bob, carol, dick, dev, minter]) => {
 
         // For ppx spending tests
         await this.ppx.mint(carol, '580000000000000000000', { from: minter });
+        await this.ppx.mint(eva, '160230000000000000000000', { from: minter });
         await this.ppy.mint(dick, '100', { from: minter });
 
 
@@ -42,7 +44,7 @@ contract('FishingMaster', ([alice, bob, carol, dick, dev, minter]) => {
       this.lp7 = await MockBEP20.new('LPToken', 'LP1', '1000000', { from: minter });
       this.lp8 = await MockBEP20.new('LPToken', 'LP2', '1000000', { from: minter });
       this.lp9 = await MockBEP20.new('LPToken', 'LP3', '1000000', { from: minter });
-      await this.chef.add('2000', this.lp1.address, true, true, { from: minter });
+      await this.chef.add('1000', this.lp1.address, true, true, { from: minter });
       await this.chef.add('1000', this.lp2.address, true, true, { from: minter });
       await this.chef.add('500', this.lp3.address, true, true, { from: minter });
       await this.chef.add('500', this.lp3.address, true, true, { from: minter });
@@ -53,24 +55,32 @@ contract('FishingMaster', ([alice, bob, carol, dick, dev, minter]) => {
       await this.chef.add('100', this.lp3.address, true, true, { from: minter });
       assert.equal((await this.chef.poolLength()).toString(), "9");
 
+      await this.chef.set(0, '2000', true, { from: minter });
+
       await time.advanceBlockTo('170');
       await this.lp1.approve(this.chef.address, '1000', { from: alice });
       assert.equal((await this.ppx.balanceOf(alice)).toString(), '0');
+
+      
       await this.chef.deposit(0, '20', { from: alice });
+      await time.advanceBlockTo('173');
+      assert.equal((await this.chef.pendingCake(0, { from: alice })).toString(), '350877192982456140350');
       await this.chef.withdraw(0, '20', { from: alice });
-      // 2000/5700 * 1000 * 1 = 350.8
-      assert.equal((await this.ppx.balanceOf(alice)).toString(), '350877192982456140350');
+      // 2000/5700 * 1000 * 2 = 701.75
+      assert.equal((await this.ppx.balanceOf(alice)).toString(), '701754385964912280701');
 
     })
 
 
     it('deposit/withdraw exp token', async () => {
-      await this.chef.add('1000', this.lp1.address, true,true, { from: minter });
+      await this.chef.add('2000', this.lp1.address, true,true, { from: minter });
       await this.chef.add('1000', this.lp2.address, true,true, { from: minter });
       await this.chef.add('1000', this.lp3.address, true,true, { from: minter });
 
+      await this.chef.set(0, '1000', true, { from: minter });
+
       await this.chef.unlockItemSlot({ from: alice });
-      await this.chef.mintNFT(alice, 0, 0, [1,2,3,0,0,0],{ from: minter });
+      await this.chef.mintNFT(alice, 0, 0, [1,2,3,4,0,0],{ from: minter });
 
       await this.chef.equipNFT(0, 1, { from: alice });
 
@@ -106,9 +116,11 @@ contract('FishingMaster', ([alice, bob, carol, dick, dev, minter]) => {
     })
 
     it('deposit/withdraw main token', async () => {
-        await this.chef.add('1000', this.lp1.address, false,true, { from: minter });
+        await this.chef.add('2000', this.lp1.address, false,true, { from: minter });
         await this.chef.add('1000', this.lp2.address, false,true, { from: minter });
         await this.chef.add('1000', this.lp3.address, false,true, { from: minter });
+
+        await this.chef.set(0, '1000', true, { from: minter });
 
         await this.chef.unlockItemSlot({ from: alice });
         await this.chef.mintNFT(alice, 0, 0, [1,2,3,0,0,0],{ from: minter });
@@ -215,32 +227,27 @@ contract('FishingMaster', ([alice, bob, carol, dick, dev, minter]) => {
 
     it('NFTTest', async () => {
         await this.chef.add('1000', this.lp1.address,true, true, { from: minter });
-      await this.chef.add('1000', this.lp2.address, true,true, { from: minter });
-      await this.chef.add('1000', this.lp3.address,true, true, { from: minter });
+        await this.chef.add('1000', this.lp2.address, true,true, { from: minter });
+        await this.chef.add('1000', this.lp3.address,true, true, { from: minter });
 
-
-        await this.chef.mintRandomNFT(carol, { from: minter });
-        await this.chef.mintRandomNFT(carol, { from: minter });
-        await this.chef.mintRandomNFT(carol, { from: minter });
+        // Mint
+        await this.chef.mintRandomNFT(carol, { from: minter }); // 1
+        await this.chef.mintNFT(carol, 0, 0, [0,0,0,0,0,0],{ from: minter }); // 2
+        await this.chef.mintNFT(carol, 0, 0, [0,0,0,0,0,0],{ from: minter }); // 3
 
 
         assert.equal((await this.ppe.ownerOf(1, { from: minter })).valueOf(), carol);
         assert.equal((await this.ppe.ownerOf(2, { from: minter })).valueOf(), carol);
         assert.equal((await this.ppe.ownerOf(3, { from: minter })).valueOf(), carol);
 
-        await this.ppe.approve(this.chef.address, '1', { from: carol });
-        await this.ppe.approve(this.chef.address, '2', { from: carol });
-        await this.ppe.approve(this.chef.address, '3', { from: carol });
-
-        await this.chef.reforgeNFT(1,3,2, { from: carol });
-
-        assert.equal((await this.ppe.ownerOf(4, { from: minter })).valueOf(), carol);
+        // Equip slot
 
         assert.equal((await this.chef.getInvSlotNum({ from: carol })).valueOf(), '0');
         await this.chef.unlockItemSlot({ from: carol });
         assert.equal((await this.chef.getInvSlotNum({ from: carol })).valueOf(), '1');
 
-       
+        // Equip 
+
         let inv = await this.chef.getInventory({ from: carol }).valueOf();
         assert.equal(inv[0], 0);
         assert.equal(inv[1], 0);
@@ -249,19 +256,18 @@ contract('FishingMaster', ([alice, bob, carol, dick, dev, minter]) => {
         assert.equal(inv[4], 0);
         assert.equal(inv[5], 0);
 
-        await expectRevert(this.chef.equipNFT(0, 4, { from: carol }), 'no enough level');
-        await this.chef.mintNFT(carol, 0, 0, [0,0,0,0,0,0],{ from: minter });
-
-        await this.chef.equipNFT(0, 5, { from: carol });
+        await expectRevert(this.chef.equipNFT(0, 1, { from: carol }), 'no enough level');
+   
+        await this.chef.equipNFT(0, 2, { from: carol });
         inv = await this.chef.getInventory({ from: carol }).valueOf();
-        assert.equal(inv[0], 5);
+        assert.equal(inv[0], 2);
         assert.equal(inv[1], 0);
         assert.equal(inv[2], 0);
         assert.equal(inv[3], 0);
         assert.equal(inv[4], 0);
         assert.equal(inv[5], 0);
 
-        await expectRevert(this.chef.equipNFT(0, 5, { from: carol }), 'already equipped');
+        await expectRevert(this.chef.equipNFT(0, 2, { from: carol }), 'already equipped');
 
         await this.chef.equipNFT(0, 0, { from: carol });
         inv = await this.chef.getInventory({ from: carol }).valueOf();
@@ -272,54 +278,200 @@ contract('FishingMaster', ([alice, bob, carol, dick, dev, minter]) => {
         assert.equal(inv[4], 0);
         assert.equal(inv[5], 0);
 
-        await expectRevert(this.chef.equipNFT(1, 5, { from: carol }), 'invalid slot');
+        await expectRevert(this.chef.equipNFT(1, 2, { from: carol }), 'invalid slot');
         await expectRevert(this.chef.equipNFT(0, 0, { from: carol }), 'already empty');
         
-        await this.chef.mintRandomNFT(alice, { from: minter });
-        await expectRevert(this.chef.equipNFT(0, 6, { from: carol }), 'not item owner');
-        
-      
-       // let info = await this.chef.getNFTInfo(id).toString();
-    })
+        await this.chef.mintRandomNFT(alice, { from: minter }); // 4
+        await expectRevert(this.chef.equipNFT(0, 4, { from: carol }), 'not item owner');
 
-    it('levelUp', async () => {
+
+        // Reforge
+
+        await this.ppe.approve(this.chef.address, '1', { from: carol });
+        await this.ppe.approve(this.chef.address, '2', { from: carol });
+        await this.ppe.approve(this.chef.address, '3', { from: carol });
+
+        await this.chef.equipNFT(0, 2, { from: carol });
+
+        await expectRevert(this.chef.reforgeNFT(1,2,3, { from: carol }), 'Item in use!');
+        await expectRevert(this.chef.reforgeNFT(3,1,2, { from: carol }), 'Item in use!');
+        await expectRevert(this.chef.reforgeNFT(2,3,1, { from: carol }), 'Item in use!');
+
+        await expectRevert(this.chef.reforgeNFT(1,4,3, { from: carol }), 'Not owner!');
+        await expectRevert(this.chef.reforgeNFT(3,1,4, { from: carol }), 'Not owner!');
+        await expectRevert(this.chef.reforgeNFT(4,3,1, { from: carol }), 'Not owner!');
+
+        await this.chef.equipNFT(0, 0, { from: carol });
+
+        await this.chef.reforgeNFT(1,3,2, { from: carol }); // to 5
+
+        assert.equal((await this.ppe.ownerOf(5, { from: minter })).valueOf(), carol);
+
+
+        // buy/reroll
         await this.ppx.approve(this.chef.address, '580000000000000000000', { from: carol });
 
-        assert.equal((await this.ppx.balanceOf(carol)).toString(), '580000000000000000000');
-        assert.equal((await this.chef.getLevel({ from: carol })).valueOf(), '0');
-        assert.equal((await this.chef.getLevelUpExp(0, { from: carol })).valueOf(), '0');
+        await expectRevert(this.chef.buyRandomNFT( { from: carol }), 'Buying NFT not enabled.');
 
-        await this.chef.levelUp({ from: carol });
+        await this.chef.updateRandomNftPrice('590000000000000000000', { from: minter });
+        assert.equal((await this.chef.RANDOM_NFT_PRICE()).toString(), '590000000000000000000');
 
-        assert.equal((await this.ppx.balanceOf(carol)).toString(), '580000000000000000000');
-        assert.equal((await this.chef.getLevel({ from: carol })).valueOf(), '1');
-        assert.equal((await this.chef.getLevelUpExp(1, { from: carol })).valueOf(), '20000000000000000000');
+        await expectRevert(this.chef.buyRandomNFT( { from: carol }), 'No enough balance.');
+        
+        await this.chef.updateRandomNftPrice('80000000000000000000', { from: minter });
+        assert.equal((await this.chef.RANDOM_NFT_PRICE()).toString(), '80000000000000000000');
 
-        await this.chef.levelUp({ from: carol });
+        await this.chef.buyRandomNFT( { from: carol }); // to 6
 
-        assert.equal((await this.ppx.balanceOf(carol)).toString(), '560000000000000000000');
-        assert.equal((await this.chef.getLevel({ from: carol })).valueOf(), '2');
-        assert.equal((await this.chef.getLevelUpExp(2, { from: carol })).valueOf(), '70000000000000000000');
+        assert.equal((await this.ppx.balanceOf(carol)).toString(), '500000000000000000000');
 
-        await this.chef.levelUp({ from: carol });
+       
+        await expectRevert(this.chef.upgradeNFT(6, 0, { from: carol }), 'Upgrading NFT not enabled.');
 
-        assert.equal((await this.ppx.balanceOf(carol)).toString(), '490000000000000000000');
-        assert.equal((await this.chef.getLevel( { from: carol })).valueOf(), '3');
-        assert.equal((await this.chef.getLevelUpExp(3, { from: carol })).valueOf(), '120000000000000000000');
+        await this.chef.updateUpgradeNftPrice('590000000000000000000', { from: minter });
+        assert.equal((await this.chef.UPGRADE_NFT_PRICE()).toString(), '590000000000000000000');
 
-        await this.chef.levelUp({ from: carol });
+        await expectRevert(this.chef.upgradeNFT(6, 0, { from: carol }), 'No enough balance.');
+        
+        await this.chef.updateUpgradeNftPrice('100000000000000000000', { from: minter });
+        assert.equal((await this.chef.UPGRADE_NFT_PRICE()).toString(), '100000000000000000000');
 
-        assert.equal((await this.ppx.balanceOf(carol)).toString(), '370000000000000000000');
-        assert.equal((await this.chef.getLevel( { from: carol })).valueOf(), '4');
-        assert.equal((await this.chef.getLevelUpExp(4, { from: carol })).valueOf(), '170000000000000000000');
+        await expectRevert(this.chef.upgradeNFT(4, 0, { from: carol }), 'Not owner!');
+        
+        await this.chef.mintNFT(carol, 0, 0, [1,2,3,4,0,0],{ from: minter }); // 7
 
-        await this.chef.levelUp({ from: carol });
+        await this.chef.equipNFT(0, 7, { from: carol });
+        await expectRevert(this.chef.upgradeNFT(7, 0, { from: carol }), 'Item in use!');
+        await this.chef.equipNFT(0, 0, { from: carol });
+        await expectRevert(this.chef.upgradeNFT(7, 7, { from: carol }), 'index out of range!');
+        await expectRevert(this.chef.upgradeNFT(7, 4, { from: carol }), 'No existing attr!');
+
+        
+
+        this.chef.upgradeNFT(7, 0, { from: carol })
+
+        assert.equal((await this.ppx.balanceOf(carol)).toString(), '400000000000000000000');
+
+        this.chef.upgradeNFT(7, 1, { from: carol })
+
+        assert.equal((await this.ppx.balanceOf(carol)).toString(), '300000000000000000000');
+
+        this.chef.upgradeNFT(7, 2, { from: carol })
 
         assert.equal((await this.ppx.balanceOf(carol)).toString(), '200000000000000000000');
-        assert.equal((await this.chef.getLevel( { from: carol })).valueOf(), '5');
-        assert.equal((await this.chef.getLevelUpExp(5, { from: carol })).valueOf(), '220000000000000000000');
 
-        await expectRevert(this.chef.levelUp({ from: carol }), 'No enough balance.');
+        this.chef.upgradeNFT(7, 3, { from: carol })
+
+        assert.equal((await this.ppx.balanceOf(carol)).toString(), '100000000000000000000');
+
+        await this.chef.mintNFT(carol, 5, 6, [1,2,3,1,2,3],{ from: minter }); // 8
+        
+      
+       let info = await this.chef.getNFTInfo(8, { from: carol });
+       assert.equal(info.level, '5');
+       assert.equal(info.template, '6');
+       assert.equal(info.attr[0], '1');
+       assert.equal(info.attr[1], '2');
+       assert.equal(info.attr[2], '3');
+       assert.equal(info.attr[3], '1');
+       assert.equal(info.attr[4], '2');
+       assert.equal(info.attr[5], '3');
+    })
+
+    it('levelUpAndUnlockSlot', async () => {
+        let balance = BigNumber.from((await this.ppx.balanceOf(eva)).toString());
+
+        await this.ppx.approve(this.chef.address, balance.toString(), { from: eva });
+
+        // zero is special
+        assert.equal((await this.chef.getLevel({ from: eva })).valueOf(), '0');
+        assert.equal((await this.chef.getLevelUpExp(0, { from: eva })).valueOf(), '0');
+        await this.chef.levelUp({ from: eva });
+        await this.chef.unlockItemSlot({ from: eva });
+        assert.equal((await this.chef.getInvSlotNum({ from: eva })).valueOf(), '1');
+        assert.equal((await this.ppx.balanceOf(eva)).toString(), balance.toString());
+
+
+        for (level =1; level < 62; level++) {
+            
+            if (level == 20) {
+                await expectRevert(this.chef.unlockItemSlot({ from: eva }), 'No enough level.');
+                assert.equal((await this.chef.getUnlockSlotLevelRequirement(1, { from: eva })).valueOf(), '21');
+            } else if (level == 21) {
+                let cost = BigNumber.from((await this.chef.getUnlockSlotExp(1, { from: eva })).toString());
+                balance = balance.sub(cost);
+                await this.chef.unlockItemSlot({ from: eva });
+                assert.equal((await this.chef.getInvSlotNum({ from: eva })).valueOf(), '2');
+            } else if (level == 30) {
+                await expectRevert(this.chef.unlockItemSlot({ from: eva }), 'No enough level.');
+                assert.equal((await this.chef.getUnlockSlotLevelRequirement(2, { from: eva })).valueOf(), '31');
+            } else if (level == 31) {
+                let cost = BigNumber.from((await this.chef.getUnlockSlotExp(2, { from: eva })).toString());
+                balance = balance.sub(cost);
+                await this.chef.unlockItemSlot({ from: eva });
+                assert.equal((await this.chef.getInvSlotNum({ from: eva })).valueOf(), '3');
+            } else if (level == 40) {
+                await expectRevert(this.chef.unlockItemSlot({ from: eva }), 'No enough level.');
+                assert.equal((await this.chef.getUnlockSlotLevelRequirement(3, { from: eva })).valueOf(), '41');
+            } else if (level == 41) {
+                let cost = BigNumber.from((await this.chef.getUnlockSlotExp(3, { from: eva })).toString());
+                balance = balance.sub(cost);
+                await this.chef.unlockItemSlot({ from: eva });
+                assert.equal((await this.chef.getInvSlotNum({ from: eva })).valueOf(), '4');
+            } else if (level == 50) {
+                await expectRevert(this.chef.unlockItemSlot({ from: eva }), 'No enough level.');
+                assert.equal((await this.chef.getUnlockSlotLevelRequirement(4, { from: eva })).valueOf(), '51');
+            } else if (level == 51) {
+                let cost = BigNumber.from((await this.chef.getUnlockSlotExp(4, { from: eva })).toString());
+                balance = balance.sub(cost);
+                await this.chef.unlockItemSlot({ from: eva });
+                assert.equal((await this.chef.getInvSlotNum({ from: eva })).valueOf(), '5');
+            } else if (level == 60) {
+                await expectRevert(this.chef.unlockItemSlot({ from: eva }), 'No enough level.');
+                assert.equal((await this.chef.getUnlockSlotLevelRequirement(5, { from: eva })).valueOf(), '61');
+            } else if (level == 61) {
+                let cost = BigNumber.from((await this.chef.getUnlockSlotExp(5, { from: eva })).toString());
+                balance = balance.sub(cost);
+                await this.chef.unlockItemSlot({ from: eva });
+                assert.equal((await this.chef.getInvSlotNum({ from: eva })).valueOf(), '6');
+            }
+
+            
+            let expected_exp = BigNumber.from(level * 50-30).mul('1000000000000000000');
+            assert.equal((await this.chef.getLevel({ from: eva })).valueOf(), level.toString());
+            assert.equal((await this.chef.getLevelUpExp(level, { from: eva })).valueOf().toString(), expected_exp.toString());
+            assert(balance.gt(expected_exp), balance.toString() + '!>' + expected_exp.toString());
+            await this.chef.levelUp({ from: eva });
+            balance = balance.sub(expected_exp);
+            assert.equal((await this.ppx.balanceOf(eva)).toString(), balance.toString());
+        }
+
+
+        await expectRevert(this.chef.unlockItemSlot({ from: eva }), 'Maximum slot unlocked.');
+        await expectRevert(this.chef.levelUp({ from: eva }), 'No enough balance.');
+
+        // return 0 for invalid input, avoid exception in view
+        assert.equal((await this.chef.getUnlockSlotExp(6, { from: eva })).valueOf(), '0');
+        assert.equal((await this.chef.getUnlockSlotLevelRequirement(6, { from: eva })).valueOf(), '0');
+
+        // Some high level equip test
+        await this.chef.mintNFT(eva, 0, 0, [0,0,0,0,0,0],{ from: minter }); // 1
+        await this.chef.mintNFT(eva, 0, 0, [0,0,0,0,0,0],{ from: minter }); // 2
+        await this.chef.mintNFT(eva, 0, 0, [0,0,0,0,0,0],{ from: minter }); // 3
+        await this.chef.mintNFT(eva, 0, 0, [0,0,0,0,0,0],{ from: minter }); // 4
+        await this.chef.equipNFT(3, 1, { from: eva });
+        await this.chef.equipNFT(3, 4, { from: eva });
+
+        await this.ppe.approve(this.chef.address, '1', { from: eva });
+        await this.ppe.approve(this.chef.address, '2', { from: eva });
+        await this.ppe.approve(this.chef.address, '3', { from: eva });
+        await this.ppe.approve(this.chef.address, '4', { from: eva });
+ 
+
+        await expectRevert(this.chef.reforgeNFT(1,2,4, { from: eva }), 'Item in use!');
+        await this.chef.reforgeNFT(1,2,3, { from: eva }); // to 5
+
+
     })
 
 
