@@ -37,6 +37,7 @@ contract('FishingMaster', ([alice, bob, carol, dick, eva, dev, minter]) => {
         await this.lp2.transfer(alice, '2000', { from: minter });
         await this.lp3.transfer(alice, '2000', { from: minter });
     });
+
     it('real case', async () => {
       this.lp4 = await MockBEP20.new('LPToken', 'LP1', '1000000', { from: minter });
       this.lp5 = await MockBEP20.new('LPToken', 'LP2', '1000000', { from: minter });
@@ -70,7 +71,6 @@ contract('FishingMaster', ([alice, bob, carol, dick, eva, dev, minter]) => {
       assert.equal((await this.ppx.balanceOf(alice)).toString(), '701754385964912280701');
 
     })
-
 
     it('deposit/withdraw exp token', async () => {
       await this.chef.add('2000', this.lp1.address, true,true, { from: minter });
@@ -177,7 +177,6 @@ contract('FishingMaster', ([alice, bob, carol, dick, eva, dev, minter]) => {
         
       })
 
-    
     it('update multiplier', async () => {
       await this.chef.add('1000', this.lp1.address,true, true, { from: minter });
       await this.chef.add('1000', this.lp2.address, true,true, { from: minter });
@@ -474,7 +473,6 @@ contract('FishingMaster', ([alice, bob, carol, dick, eva, dev, minter]) => {
 
     })
 
-
     it('update key modifiers', async () => {
         // updateExpMultiplier
         assert.equal((await this.chef.EXP_BONUS_MULTIPLIER()).valueOf(), '1000000000000000000');
@@ -543,6 +541,66 @@ contract('FishingMaster', ([alice, bob, carol, dick, eva, dev, minter]) => {
 
 
         // setItemHelper
+
+
+    })
+
+    it('guild tests', async () => {
+        this.lp4 = await MockBEP20.new('LPToken', 'LP1', '1000000', { from: minter });
+      this.lp5 = await MockBEP20.new('LPToken', 'LP2', '1000000', { from: minter });
+      this.lp6 = await MockBEP20.new('LPToken', 'LP3', '1000000', { from: minter });
+      this.lp7 = await MockBEP20.new('LPToken', 'LP1', '1000000', { from: minter });
+      this.lp8 = await MockBEP20.new('LPToken', 'LP2', '1000000', { from: minter });
+      this.lp9 = await MockBEP20.new('LPToken', 'LP3', '1000000', { from: minter });
+      await this.chef.add('1000', this.lp1.address, true, true, { from: minter });
+      await this.chef.add('1000', this.lp2.address, true, true, { from: minter });
+      await this.chef.add('500', this.lp3.address, true, true, { from: minter });
+      await this.chef.add('500', this.lp3.address, true, true, { from: minter });
+      await this.chef.add('500', this.lp3.address, true, true, { from: minter });
+      await this.chef.add('500', this.lp3.address, true, true, { from: minter });
+      await this.chef.add('500', this.lp3.address, true, true, { from: minter });
+      await this.chef.add('100', this.lp3.address, true, true, { from: minter });
+      await this.chef.add('100', this.lp3.address, true, true, { from: minter });
+      assert.equal((await this.chef.poolLength()).toString(), "9");
+
+      await this.chef.set(0, '2000', true, { from: minter });
+
+     // await time.advanceBlockTo('870');
+
+      await expectRevert(this.chef.joinGuild(bob, { from: alice }), 'guild not exit');
+      // Create guild
+      await this.chef.joinGuild(bob, { from: bob });
+      await this.chef.joinGuild(bob, { from: carol });
+
+      await this.chef.joinGuild(bob, { from: alice });
+      await expectRevert(this.chef.joinGuild(carol, { from: alice }), 'Already in another guild');
+      
+
+      await expectRevert(this.chef.leaveGuild({ from: eva }), 'not in guild');
+      
+      // Allow gm dismiss and recreate without affect member
+      await this.chef.leaveGuild({ from: bob })
+      await this.chef.joinGuild(bob, { from: bob });
+
+      await this.chef.leaveGuild({ from: alice })
+      await this.chef.joinGuild(bob, { from: alice });
+      await this.chef.leaveGuild({ from: bob })
+      await this.chef.leaveGuild({ from: alice })
+      await this.chef.joinGuild(bob, { from: bob });
+      await this.chef.joinGuild(bob, { from: alice });
+      
+      await this.lp1.approve(this.chef.address, '1000', { from: alice });
+      assert.equal((await this.ppx.balanceOf(alice)).toString(), '0');
+
+      // TODO: Check bonus numbers after bonus level is determined.
+
+      
+      await this.chef.deposit(0, '20', { from: alice });
+    //  await time.advanceBlockTo('873');
+     // assert.equal((await this.chef.pendingCake(0, { from: alice })).toString(), '350877192982456140350');
+      await this.chef.withdraw(0, '20', { from: alice });
+      // 2000/5700 * 1000 * 2 = 701.75
+     // assert.equal((await this.ppx.balanceOf(alice)).toString(), '701754385964912280701');
 
 
     })

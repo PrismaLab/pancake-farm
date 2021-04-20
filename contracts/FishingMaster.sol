@@ -48,6 +48,9 @@ contract FishingMaster is Ownable {
         uint256 level; // Level.
         uint256[6] invSlot; // Inventory slot.
         uint256 invSlotNum; // Max slot number.
+        address guildMaster; // Guild system leader.
+        uint256 guildDeposit; // Guild system balance count.
+        uint256 depositToGuild; // Balance contribute to guild.
     }
 
     // Info of each pool.
@@ -598,6 +601,9 @@ contract FishingMaster is Ownable {
 
         user.rewardDebt = user.weight.mul(pool.accCakePerShare).div(1e12);
 
+        // Guild 
+        guildDeposit(_amount);
+
         emit Deposit(msg.sender, _pid, _amount);
 
         // NFT
@@ -648,6 +654,9 @@ contract FishingMaster is Ownable {
 
         user.rewardDebt = user.amount.mul(pool.accCakePerShare).div(1e12);
 
+        // Guild
+        guildWithdraw(_amount);
+
         emit Withdraw(msg.sender, _pid, _amount);
         // NFT
         if (existingDeposit) {
@@ -665,6 +674,26 @@ contract FishingMaster is Ownable {
         emit EmergencyWithdraw(msg.sender, _pid, user.amount);
         user.amount = 0;
         user.rewardDebt = 0;
+    }
+
+    function joinGuild(address guildMaster) public {
+        UserProfileInfo storage userProfile = userProfileInfo[msg.sender];
+        require(userProfile.guildMaster == address(0), 'Already in another guild');
+        UserProfileInfo storage gmProfile = userProfileInfo[guildMaster];
+        if (guildMaster != msg.sender) {  
+            require(guildMaster == gmProfile.guildMaster, 'guild not exit');
+        }
+        userProfile.guildMaster = guildMaster;
+        gmProfile.guildDeposit = gmProfile.guildDeposit.add(userProfile.depositToGuild);
+    }
+
+    function leaveGuild() public {
+        UserProfileInfo storage userProfile = userProfileInfo[msg.sender];
+        require(userProfile.guildMaster != address(0), 'not in guild');
+        UserProfileInfo storage gmProfile = userProfileInfo[userProfile.guildMaster];
+        // Do not check if guild is dismissed.
+        gmProfile.guildDeposit = gmProfile.guildDeposit.sub(userProfile.depositToGuild);
+        userProfile.guildMaster = address(0);
     }
 
     // Public functions that are view
@@ -735,6 +764,35 @@ contract FishingMaster is Ownable {
         return _currentLevel.mul(50).sub(30).mul(10**expToken.decimals());
     }
 
+    // Get Exp comsumption for level up.
+    function getGuildBonus()
+        public
+        view
+        returns (uint256)
+    {
+        UserProfileInfo storage userProfile = userProfileInfo[msg.sender];
+        // Not in any guild
+        if (userProfile.guildMaster == address(0)) {
+            return 0;
+        }
+        UserProfileInfo storage gmProfile = userProfileInfo[userProfile.guildMaster];
+        if (gmProfile.guildMaster != userProfile.guildMaster) {
+            // GM already leave the guild.
+            return 0;
+        }
+        uint256 bonus = 0;
+        // TODO: Change this number!
+        if (gmProfile.guildDeposit > 1000000) {
+            bonus = 20;
+        } else if (gmProfile.guildDeposit > 100000) {
+            bonus = 10;
+        }
+        if (bonus > 0 && userProfile.guildMaster == msg.sender) {
+            bonus = bonus + 5;
+        }
+        return bonus;
+    }
+
     // Calculate bonus from level and items. Returns percentage.
     function calculateWeightBonus(uint256 _pid)
         public
@@ -746,6 +804,7 @@ contract FishingMaster is Ownable {
         PoolInfo storage pool = poolInfo[_pid];
 
         uint256 itemBonus = 100;
+        uint256 guildBonus = 100;
 
         if (userProfile.invSlotNum <= 6) {
             for (uint8 i = 0; i < userProfile.invSlotNum; i++) {
@@ -788,12 +847,17 @@ contract FishingMaster is Ownable {
                 }
             }
         }
-
+        
+        if (pool.isExpToken) {
+            guildBonus = guildBonus.add(getGuildBonus());
+        }
+        
         return
             levelToBonus(userProfile.level)
                 .add(100)
                 .mul(itemBonus)
-                .div(100)
+                .mul(guildBonus)
+                .div(10000)
                 .sub(100);
     }
 
@@ -866,6 +930,28 @@ contract FishingMaster is Ownable {
         } else {
             mainToken.transfer(_to, _amount);
         }
+    }
+
+    function guildDeposit(uint256 amount) internal {
+        UserProfileInfo storage userProfile = userProfileInfo[msg.sender];
+        userProfile.depositToGuild = userProfile.depositToGuild.add(amount);
+        if (userProfile.guildMaster == address(0)) {
+            return;
+        }
+        UserProfileInfo storage gmProfile = userProfileInfo[userProfile.guildMaster];
+        // change user deposit count even if the master dismissed the guild.
+        gmProfile.guildDeposit = gmProfile.guildDeposit.add(amount);
+    }
+
+    function guildWithdraw(uint256 amount) internal {
+        UserProfileInfo storage userProfile = userProfileInfo[msg.sender];
+        userProfile.depositToGuild = userProfile.depositToGuild.sub(amount);
+        if (userProfile.guildMaster == address(0)) {
+            return;
+        }
+        UserProfileInfo storage gmProfile = userProfileInfo[userProfile.guildMaster];
+        // change user deposit count even if the master dismissed the guild.
+        gmProfile.guildDeposit = gmProfile.guildDeposit.sub(amount);
     }
 
     // Internal functions that are view
