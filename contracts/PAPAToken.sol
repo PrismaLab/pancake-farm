@@ -2,9 +2,10 @@
 pragma solidity ^0.8.0;
 
 import "./libs/BEP20.sol";
+import "./libs/BEP20Capped.sol";
 
 // PapayaSwap PAPA Token with Governance.
-contract PAPAToken is BEP20('PapayaSwap PAPA Token', 'PAPA') {
+contract PAPAToken is BEP20Capped {
     /// @notice Creates `_amount` token to `_to`. Must only be called by the owner (FishingMaster).
     function mint(address _to, uint256 _amount) public onlyOwner {
         _mint(_to, _amount);
@@ -46,6 +47,13 @@ contract PAPAToken is BEP20('PapayaSwap PAPA Token', 'PAPA') {
 
     /// @notice An event thats emitted when a delegate account's vote balance changes
     event DelegateVotesChanged(address indexed delegate, uint previousBalance, uint newBalance);
+
+    constructor (uint256 cap)
+        BEP20('PapayaSwap PAPA Token', 'PAPA')
+        BEP20Capped(cap)
+    {
+
+    }
 
     /**
      * @notice Delegate votes from `msg.sender` to `delegatee`

@@ -231,7 +231,7 @@ contract BEP20 is Context, IBEP20, Ownable {
         address sender,
         address recipient,
         uint256 amount
-    ) internal {
+    ) internal virtual {
         require(sender != address(0), 'BEP20: transfer from the zero address');
         require(recipient != address(0), 'BEP20: transfer to the zero address');
 
@@ -249,7 +249,7 @@ contract BEP20 is Context, IBEP20, Ownable {
      *
      * - `to` cannot be the zero address.
      */
-    function _mint(address account, uint256 amount) internal {
+    function _mint(address account, uint256 amount) internal virtual {
         require(account != address(0), 'BEP20: mint to the zero address');
 
         _totalSupply = _totalSupply.add(amount);
@@ -268,7 +268,7 @@ contract BEP20 is Context, IBEP20, Ownable {
      * - `account` cannot be the zero address.
      * - `account` must have at least `amount` tokens.
      */
-    function _burn(address account, uint256 amount) internal {
+    function _burn(address account, uint256 amount) internal virtual {
         require(account != address(0), 'BEP20: burn from the zero address');
 
         _balances[account] = _balances[account].sub(amount, 'BEP20: burn amount exceeds balance');
@@ -293,7 +293,7 @@ contract BEP20 is Context, IBEP20, Ownable {
         address owner,
         address spender,
         uint256 amount
-    ) internal {
+    ) internal virtual {
         require(owner != address(0), 'BEP20: approve from the zero address');
         require(spender != address(0), 'BEP20: approve to the zero address');
 
