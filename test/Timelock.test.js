@@ -15,7 +15,7 @@ function encodeParameters(types, values) {
 
 contract('Timelock', ([alice, bob, carol, dev, minter]) => {
     beforeEach(async () => {
-        this.ppy = await PAPAToken.new({ from: alice });
+        this.ppy = await PAPAToken.new('1000000000000000000000000000',{ from: alice });
         this.timelock = await Timelock.new(bob, '28800', { from: alice }); //8hours
     });
 

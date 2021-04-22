@@ -10,7 +10,7 @@ const MockBEP20 = artifacts.require('testlibs/MockBEP20');
 contract('FishingMaster', ([alice, bob, carol, dick, eva, dev, minter]) => {
     beforeEach(async () => {
         this.ppx = await YAYAToken.new({ from: minter });
-        this.ppy = await PAPAToken.new({ from: minter });
+        this.ppy = await PAPAToken.new('1000000000000000000000000000', { from: minter });
         this.ppe = await ItemNFT.new({ from: minter });
         this.itemHelper = await ItemHelper.new({ from: minter });
         this.lp1 = await MockBEP20.new('LPToken', 'LP1', '1000000', { from: minter });
@@ -473,7 +473,7 @@ contract('FishingMaster', ([alice, bob, carol, dick, eva, dev, minter]) => {
 
     })
 
-    it('update key modifiers', async () => {
+    it('update modifiers and user info', async () => {
         // updateExpMultiplier
         assert.equal((await this.chef.EXP_BONUS_MULTIPLIER()).valueOf(), '1000000000000000000');
         await expectRevert(this.chef.updateExpMultiplier('2000000000000000000', { from: alice }), 'Ownable: caller is not the owner');
@@ -532,6 +532,13 @@ contract('FishingMaster', ([alice, bob, carol, dick, eva, dev, minter]) => {
         assert.equal((await this.chef.NFT_BASE_DROP_RATE_BASE()).valueOf(), '1000000');
         assert.equal((await this.chef.NFT_DROP_RATE_CAP()).valueOf(), '20000');
 
+
+        // updateCustomizeInfo
+        assert.equal((await this.chef.getCustomizeInfo({from: alice})).valueOf(), '0');
+        await this.chef.updateCustomizeInfo('2000000000000000000', { from: alice });
+        assert.equal((await this.chef.getCustomizeInfo()).valueOf(), '2000000000000000000');
+        await this.chef.updateCustomizeInfo('1000000000000000000', { from: alice });
+        assert.equal((await this.chef.getCustomizeInfo()).valueOf(), '1000000000000000000');
 
         // devaddr
        

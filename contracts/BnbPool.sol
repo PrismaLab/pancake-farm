@@ -85,14 +85,7 @@ contract BnbPool is Ownable {
         WBNB = _wbnb;
 
         // staking pool
-        poolInfo.push(
-            PoolInfo({
-                lpToken: _lp,
-                allocPoint: 1000,
-                lastRewardBlock: startBlock,
-                accCakePerShare: 0
-            })
-        );
+        poolInfo.push(PoolInfo({lpToken: _lp, allocPoint: 1000, lastRewardBlock: startBlock, accCakePerShare: 0}));
 
         totalAllocPoint = 1000;
     }
@@ -125,11 +118,7 @@ contract BnbPool is Ownable {
     }
 
     // Return reward multiplier over the given _from to _to block.
-    function getMultiplier(uint256 _from, uint256 _to)
-        public
-        view
-        returns (uint256)
-    {
+    function getMultiplier(uint256 _from, uint256 _to) public view returns (uint256) {
         if (_to <= bonusEndBlock) {
             return _to.sub(_from);
         } else if (_from >= bonusEndBlock) {
@@ -146,15 +135,9 @@ contract BnbPool is Ownable {
         uint256 accCakePerShare = pool.accCakePerShare;
         uint256 lpSupply = pool.lpToken.balanceOf(address(this));
         if (block.number > pool.lastRewardBlock && lpSupply != 0) {
-            uint256 multiplier =
-                getMultiplier(pool.lastRewardBlock, block.number);
-            uint256 cakeReward =
-                multiplier.mul(rewardPerBlock).mul(pool.allocPoint).div(
-                    totalAllocPoint
-                );
-            accCakePerShare = accCakePerShare.add(
-                cakeReward.mul(1e12).div(lpSupply)
-            );
+            uint256 multiplier = getMultiplier(pool.lastRewardBlock, block.number);
+            uint256 cakeReward = multiplier.mul(rewardPerBlock).mul(pool.allocPoint).div(totalAllocPoint);
+            accCakePerShare = accCakePerShare.add(cakeReward.mul(1e12).div(lpSupply));
         }
         return user.amount.mul(accCakePerShare).div(1e12).sub(user.rewardDebt);
     }
@@ -171,16 +154,12 @@ contract BnbPool is Ownable {
             return;
         }
         uint256 multiplier = getMultiplier(pool.lastRewardBlock, block.number);
-        uint256 cakeReward =
-            multiplier.mul(rewardPerBlock).mul(pool.allocPoint).div(
-                totalAllocPoint
-            );
-        pool.accCakePerShare = pool.accCakePerShare.add(
-            cakeReward.mul(1e12).div(lpSupply)
-        );
+        uint256 cakeReward = multiplier.mul(rewardPerBlock).mul(pool.allocPoint).div(totalAllocPoint);
+        pool.accCakePerShare = pool.accCakePerShare.add(cakeReward.mul(1e12).div(lpSupply));
         pool.lastRewardBlock = block.number;
     }
-/*
+
+    /*
     // Update reward variables for all pools. Be careful of gas spending!
     function massUpdatePools() public {
         uint256 length = poolInfo.length;
@@ -199,10 +178,7 @@ contract BnbPool is Ownable {
 
         updatePool();
         if (user.amount > 0) {
-            uint256 pending =
-                user.amount.mul(pool.accCakePerShare).div(1e12).sub(
-                    user.rewardDebt
-                );
+            uint256 pending = user.amount.mul(pool.accCakePerShare).div(1e12).sub(user.rewardDebt);
             if (pending > 0) {
                 rewardToken.safeTransfer(address(msg.sender), pending);
             }
@@ -229,10 +205,7 @@ contract BnbPool is Ownable {
         UserInfo storage user = userInfo[msg.sender];
         require(user.amount >= _amount, "withdraw: not good");
         updatePool();
-        uint256 pending =
-            user.amount.mul(pool.accCakePerShare).div(1e12).sub(
-                user.rewardDebt
-            );
+        uint256 pending = user.amount.mul(pool.accCakePerShare).div(1e12).sub(user.rewardDebt);
         if (pending > 0 && !user.inBlackList) {
             rewardToken.safeTransfer(address(msg.sender), pending);
         }
@@ -258,10 +231,7 @@ contract BnbPool is Ownable {
 
     // Withdraw reward. EMERGENCY ONLY.
     function emergencyRewardWithdraw(uint256 _amount) public onlyOwner {
-        require(
-            _amount < rewardToken.balanceOf(address(this)),
-            "not enough token"
-        );
+        require(_amount < rewardToken.balanceOf(address(this)), "not enough token");
         rewardToken.safeTransfer(address(msg.sender), _amount);
     }
 }

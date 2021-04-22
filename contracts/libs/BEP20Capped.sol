@@ -7,13 +7,13 @@ import "./BEP20.sol";
  * @dev Extension of {BEP20} that adds a cap to the supply of tokens.
  */
 abstract contract BEP20Capped is BEP20 {
-    uint256 immutable private _cap;
+    uint256 private immutable _cap;
 
     /**
      * @dev Sets the value of the `cap`. This value is immutable, it can only be
      * set once during construction.
      */
-    constructor (uint256 cap_) {
+    constructor(uint256 cap_) {
         require(cap_ > 0, "BEP20Capped: cap is 0");
         _cap = cap_;
     }

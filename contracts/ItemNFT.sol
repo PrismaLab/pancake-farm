@@ -24,5 +24,4 @@ contract ItemNFT is ERC721Enumerable, Ownable {
         require(_isApprovedOrOwner(msg.sender, _tokenId), "ERC721: transfer caller is not owner nor approved");
         _burn(_tokenId);
     }
-
 }

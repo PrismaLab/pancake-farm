@@ -51,6 +51,7 @@ contract FishingMaster is Ownable {
         address guildMaster; // Guild system leader.
         uint256 guildDeposit; // Guild system balance count.
         uint256 depositToGuild; // Balance contribute to guild.
+        uint256 customizeInfo; // User customization info (avatar etc.).
     }
 
     // Info of each pool.
@@ -87,11 +88,11 @@ contract FishingMaster is Ownable {
     // Dev address.
     address public devaddr;
 
-    // Exp tokens (PAPA) created per block. 
+    // Exp tokens (PAPA) created per block.
     // Note: the unit is 1 token, not the min unit which is 1e-18 token
     // The end value should be this * multiplier.
     uint256 public expTokenPerBlock;
-    // Main tokens (YAYA) created per block. 
+    // Main tokens (YAYA) created per block.
     // Note: the unit is 1 token, not the min unit which is 1e-18 token
     // The end value should be this * multiplier.
     uint256 public mainTokenPerBlock;
@@ -133,11 +134,7 @@ contract FishingMaster is Ownable {
 
     event Deposit(address indexed user, uint256 indexed pid, uint256 amount);
     event Withdraw(address indexed user, uint256 indexed pid, uint256 amount);
-    event EmergencyWithdraw(
-        address indexed user,
-        uint256 indexed pid,
-        uint256 amount
-    );
+    event EmergencyWithdraw(address indexed user, uint256 indexed pid, uint256 amount);
     event MintNFT(address indexed user, uint256 indexed tokenid);
 
     constructor(
@@ -243,26 +240,23 @@ contract FishingMaster is Ownable {
     }
 
     // Equip an item to a slot.
-    function equipNFT(
-        uint256 _slot,
-        uint256 _tokenId
-    ) external {
+    function equipNFT(uint256 _slot, uint256 _tokenId) external {
         UserProfileInfo storage userProfile = userProfileInfo[msg.sender];
         itemDetail storage detail = itemDetails[_tokenId];
         require(_slot < userProfile.invSlotNum && _slot < 6, "invalid slot");
 
         if (_tokenId == 0) {
             require(_tokenId != userProfile.invSlot[_slot], "already empty");
-        } else{
+        } else {
             require(itemToken.ownerOf(_tokenId) == msg.sender, "not item owner");
             require(detail.level <= userProfile.level, "no enough level");
-            for (uint8 i = 0; i < 6; i ++) { 
+            for (uint8 i = 0; i < 6; i++) {
                 // case 1: already equipped in other slot.
                 // case 2: equip again in same slot for whatever reason.
                 // It should always be fine to return here.
                 require(_tokenId != userProfile.invSlot[i], "already equipped");
             }
-        } 
+        }
         userProfile.invSlot[_slot] = _tokenId;
     }
 
@@ -285,7 +279,7 @@ contract FishingMaster is Ownable {
         uint256 slotNum = userProfile.invSlotNum;
         require(slotNum < 6, "Maximum slot unlocked.");
         require(userProfile.level >= getUnlockSlotLevelRequirement(slotNum), "No enough level.");
-    
+
         uint256 requiremnt = getUnlockSlotExp(slotNum);
         userProfile.invSlotNum = slotNum.add(1);
         if (requiremnt > 0) {
@@ -361,24 +355,22 @@ contract FishingMaster is Ownable {
         expToken.burn(msg.sender, UPGRADE_NFT_PRICE);
     }
 
+    // Update user customization info.
+    function updateCustomizeInfo(uint256 newInfo) external {
+        UserProfileInfo storage userProfile = userProfileInfo[msg.sender];
+        userProfile.customizeInfo = newInfo;
+    }
+
     // External functions that are view
 
     // Drop rate with modifiers, 5 decimal digit.
     function getNFTDropRate(uint256 _pid) external view returns (uint256) {
         return
-            getNFTDropCounter(_pid)
-                .mul(calculateMFBonus(_pid).add(100))
-                .div(100)
-                .mul(1e5)
-                .div(NFT_BASE_DROP_RATE_BASE);
+            getNFTDropCounter(_pid).mul(calculateMFBonus(_pid).add(100)).div(100).mul(1e5).div(NFT_BASE_DROP_RATE_BASE);
     }
 
     // View function to see pending tokens on frontend.
-    function pendingCake(uint256 _pid)
-        external
-        view
-        returns (uint256)
-    {
+    function pendingCake(uint256 _pid) external view returns (uint256) {
         require(_pid < poolInfo.length, "invalid pid");
         PoolInfo storage pool = poolInfo[_pid];
         UserInfo storage user = userInfo[_pid][msg.sender];
@@ -387,15 +379,8 @@ contract FishingMaster is Ownable {
         uint256 lpSupply = pool.totalWeightedValue;
 
         if (block.number > pool.lastRewardBlock && lpSupply != 0) {
-            uint256 cakeReward =
-                calculateReward(
-                    pool.isExpToken,
-                    pool.allocPoint,
-                    pool.lastRewardBlock
-                );
-            accCakePerShare = accCakePerShare.add(
-                cakeReward.mul(1e12).div(lpSupply)
-            );
+            uint256 cakeReward = calculateReward(pool.isExpToken, pool.allocPoint, pool.lastRewardBlock);
+            accCakePerShare = accCakePerShare.add(cakeReward.mul(1e12).div(lpSupply));
         }
         return user.amount.mul(accCakePerShare).div(1e12).sub(user.rewardDebt);
     }
@@ -405,12 +390,14 @@ contract FishingMaster is Ownable {
         return poolInfo.length;
     }
 
+    // Query user customize info.
+    function getCustomizeInfo() external view returns (uint256) {
+        UserProfileInfo storage userProfile = userProfileInfo[msg.sender];
+        return userProfile.customizeInfo;
+    }
+
     // Query user inventory info.
-    function getInventory()
-        external
-        view
-        returns (uint256[6] memory)
-    {
+    function getInventory() external view returns (uint256[6] memory) {
         UserProfileInfo storage userProfile = userProfileInfo[msg.sender];
         return userProfile.invSlot;
     }
@@ -428,11 +415,7 @@ contract FishingMaster is Ownable {
     }
 
     // Query NFT attributes.
-    function getNFTInfo(uint256 _tokenId)
-        external
-        view
-        returns (itemDetail memory)
-    {
+    function getNFTInfo(uint256 _tokenId) external view returns (itemDetail memory) {
         itemDetail storage detail = itemDetails[_tokenId];
         return detail;
     }
@@ -463,16 +446,14 @@ contract FishingMaster is Ownable {
         if (_withUpdate) {
             massUpdatePools();
         }
-        uint256 lastRewardBlock =
-            block.number > startBlock ? block.number : startBlock;
+        uint256 lastRewardBlock = block.number > startBlock ? block.number : startBlock;
 
         if (_isExpToken) {
             totalAllocPointExpToken = totalAllocPointExpToken.add(_allocPoint);
-        }
-        else {
+        } else {
             totalAllocPointMainToken = totalAllocPointMainToken.add(_allocPoint);
         }
-        
+
         poolInfo.push(
             PoolInfo({
                 lpToken: _lpToken,
@@ -501,13 +482,9 @@ contract FishingMaster is Ownable {
 
         if (prevAllocPoint != _allocPoint) {
             if (pool.isExpToken) {
-                totalAllocPointExpToken = totalAllocPointExpToken
-                    .sub(prevAllocPoint)
-                    .add(_allocPoint);
+                totalAllocPointExpToken = totalAllocPointExpToken.sub(prevAllocPoint).add(_allocPoint);
             } else {
-                totalAllocPointMainToken = totalAllocPointMainToken
-                    .sub(prevAllocPoint)
-                    .add(_allocPoint);
+                totalAllocPointMainToken = totalAllocPointMainToken.sub(prevAllocPoint).add(_allocPoint);
             }
         }
     }
@@ -534,12 +511,7 @@ contract FishingMaster is Ownable {
             return;
         }
 
-        uint256 cakeReward =
-            calculateReward(
-                pool.isExpToken,
-                pool.allocPoint,
-                pool.lastRewardBlock
-            );
+        uint256 cakeReward = calculateReward(pool.isExpToken, pool.allocPoint, pool.lastRewardBlock);
 
         if (pool.isExpToken) {
             // Leave some yaya for dev for events.
@@ -551,9 +523,7 @@ contract FishingMaster is Ownable {
             mainToken.mint(address(this), cakeReward);
         }
 
-        pool.accCakePerShare = pool.accCakePerShare.add(
-            cakeReward.mul(1e12).div(lpSupply)
-        );
+        pool.accCakePerShare = pool.accCakePerShare.add(cakeReward.mul(1e12).div(lpSupply));
         pool.lastRewardBlock = block.number;
     }
 
@@ -571,37 +541,25 @@ contract FishingMaster is Ownable {
 
         if (user.weight > 0) {
             existingDeposit = true;
-            uint256 pending =
-                user.weight.mul(pool.accCakePerShare).div(1e12).sub(
-                    user.rewardDebt
-                );
+            uint256 pending = user.weight.mul(pool.accCakePerShare).div(1e12).sub(user.rewardDebt);
             if (pending > 0) {
                 safeTransfer(_pid, msg.sender, pending);
             }
         }
         if (_amount > 0) {
-            pool.lpToken.safeTransferFrom(
-                address(msg.sender),
-                address(this),
-                _amount
-            );
+            pool.lpToken.safeTransferFrom(address(msg.sender), address(this), _amount);
             user.amount = user.amount.add(_amount);
 
             newDeposit = true;
         }
         uint256 oldWeight = user.weight;
-        user.weight = user
-            .amount
-            .mul((100 + calculateWeightBonus(_pid)))
-            .div(100);
+        user.weight = user.amount.mul((100 + calculateWeightBonus(_pid))).div(100);
 
-        pool.totalWeightedValue = pool.totalWeightedValue.sub(oldWeight).add(
-            user.weight
-        );
+        pool.totalWeightedValue = pool.totalWeightedValue.sub(oldWeight).add(user.weight);
 
         user.rewardDebt = user.weight.mul(pool.accCakePerShare).div(1e12);
 
-        // Guild 
+        // Guild
         guildDeposit(_amount);
 
         emit Deposit(msg.sender, _pid, _amount);
@@ -630,10 +588,7 @@ contract FishingMaster is Ownable {
 
         if (user.weight > 0) {
             existingDeposit = true;
-            uint256 pending =
-                user.weight.mul(pool.accCakePerShare).div(1e12).sub(
-                    user.rewardDebt
-                );
+            uint256 pending = user.weight.mul(pool.accCakePerShare).div(1e12).sub(user.rewardDebt);
             if (pending > 0) {
                 safeTransfer(_pid, msg.sender, pending);
             }
@@ -643,14 +598,9 @@ contract FishingMaster is Ownable {
             pool.lpToken.safeTransfer(address(msg.sender), _amount);
         }
         uint256 oldWeight = user.weight;
-        user.weight = user
-            .amount
-            .mul((100 + calculateWeightBonus(_pid)))
-            .div(100);
+        user.weight = user.amount.mul((100 + calculateWeightBonus(_pid))).div(100);
 
-        pool.totalWeightedValue = pool.totalWeightedValue.sub(oldWeight).add(
-            user.weight
-        );
+        pool.totalWeightedValue = pool.totalWeightedValue.sub(oldWeight).add(user.weight);
 
         user.rewardDebt = user.amount.mul(pool.accCakePerShare).div(1e12);
 
@@ -678,10 +628,10 @@ contract FishingMaster is Ownable {
 
     function joinGuild(address guildMaster) public {
         UserProfileInfo storage userProfile = userProfileInfo[msg.sender];
-        require(userProfile.guildMaster == address(0), 'Already in another guild');
+        require(userProfile.guildMaster == address(0), "Already in another guild");
         UserProfileInfo storage gmProfile = userProfileInfo[guildMaster];
-        if (guildMaster != msg.sender) {  
-            require(guildMaster == gmProfile.guildMaster, 'guild not exit');
+        if (guildMaster != msg.sender) {
+            require(guildMaster == gmProfile.guildMaster, "guild not exit");
         }
         userProfile.guildMaster = guildMaster;
         gmProfile.guildDeposit = gmProfile.guildDeposit.add(userProfile.depositToGuild);
@@ -689,7 +639,7 @@ contract FishingMaster is Ownable {
 
     function leaveGuild() public {
         UserProfileInfo storage userProfile = userProfileInfo[msg.sender];
-        require(userProfile.guildMaster != address(0), 'not in guild');
+        require(userProfile.guildMaster != address(0), "not in guild");
         UserProfileInfo storage gmProfile = userProfileInfo[userProfile.guildMaster];
         // Do not check if guild is dismissed.
         gmProfile.guildDeposit = gmProfile.guildDeposit.sub(userProfile.depositToGuild);
@@ -699,25 +649,18 @@ contract FishingMaster is Ownable {
     // Public functions that are view
 
     // Get Exp comsumption for unlocking slot.
-    function getUnlockSlotExp(
-        uint256 _currentSlot
-    ) public view returns (uint256) {
+    function getUnlockSlotExp(uint256 _currentSlot) public view returns (uint256) {
         if (_currentSlot == 0) {
             return 0;
-        }
-        else if (_currentSlot == 1) {
+        } else if (_currentSlot == 1) {
             return uint256(2500).mul(10**expToken.decimals());
-        }
-        else if (_currentSlot == 2) {
+        } else if (_currentSlot == 2) {
             return uint256(3800).mul(10**expToken.decimals());
-        }
-        else if (_currentSlot == 3) {
+        } else if (_currentSlot == 3) {
             return uint256(5100).mul(10**expToken.decimals());
-        }
-        else if (_currentSlot == 4) {
+        } else if (_currentSlot == 4) {
             return uint256(15400).mul(10**expToken.decimals());
-        }
-        else if (_currentSlot == 5) {
+        } else if (_currentSlot == 5) {
             return uint256(40700).mul(10**expToken.decimals());
         }
         // Internal calls should already guarded against slot >= 6 cases.
@@ -726,25 +669,18 @@ contract FishingMaster is Ownable {
     }
 
     // Get Exp comsumption for unlocking slot.
-    function getUnlockSlotLevelRequirement(
-        uint256 _currentSlot
-    ) public pure returns (uint256) {
+    function getUnlockSlotLevelRequirement(uint256 _currentSlot) public pure returns (uint256) {
         if (_currentSlot == 0) {
             return 0;
-        }
-        else if (_currentSlot == 1) {
+        } else if (_currentSlot == 1) {
             return 21;
-        }
-        else if (_currentSlot == 2) {
+        } else if (_currentSlot == 2) {
             return 31;
-        }
-        else if (_currentSlot == 3) {
+        } else if (_currentSlot == 3) {
             return 41;
-        }
-        else if (_currentSlot == 4) {
+        } else if (_currentSlot == 4) {
             return 51;
-        }
-        else if (_currentSlot == 5) {
+        } else if (_currentSlot == 5) {
             return 61;
         }
         // Internal calls should already guarded against slot >= 6 cases.
@@ -753,11 +689,7 @@ contract FishingMaster is Ownable {
     }
 
     // Get Exp comsumption for level up.
-    function getLevelUpExp(uint256 _currentLevel)
-        public
-        view
-        returns (uint256)
-    {
+    function getLevelUpExp(uint256 _currentLevel) public view returns (uint256) {
         if (_currentLevel == 0) {
             return 0;
         }
@@ -765,11 +697,7 @@ contract FishingMaster is Ownable {
     }
 
     // Get Exp comsumption for level up.
-    function getGuildBonus()
-        public
-        view
-        returns (uint256)
-    {
+    function getGuildBonus() public view returns (uint256) {
         UserProfileInfo storage userProfile = userProfileInfo[msg.sender];
         // Not in any guild
         if (userProfile.guildMaster == address(0)) {
@@ -794,11 +722,7 @@ contract FishingMaster is Ownable {
     }
 
     // Calculate bonus from level and items. Returns percentage.
-    function calculateWeightBonus(uint256 _pid)
-        public
-        view
-        returns (uint256)
-    {
+    function calculateWeightBonus(uint256 _pid) public view returns (uint256) {
         require(_pid < poolInfo.length, "invalid pid");
         UserProfileInfo storage userProfile = userProfileInfo[msg.sender];
         PoolInfo storage pool = poolInfo[_pid];
@@ -808,12 +732,8 @@ contract FishingMaster is Ownable {
 
         if (userProfile.invSlotNum <= 6) {
             for (uint8 i = 0; i < userProfile.invSlotNum; i++) {
-                if (
-                    userProfile.invSlot[i] > 0 &&
-                    itemToken.ownerOf(userProfile.invSlot[i]) == msg.sender
-                ) {
-                    itemDetail storage detail =
-                        itemDetails[userProfile.invSlot[i]];
+                if (userProfile.invSlot[i] > 0 && itemToken.ownerOf(userProfile.invSlot[i]) == msg.sender) {
+                    itemDetail storage detail = itemDetails[userProfile.invSlot[i]];
                     if (detail.level > userProfile.level) {
                         continue;
                     }
@@ -822,62 +742,36 @@ contract FishingMaster is Ownable {
                             if (detail.attr[j] == 0) {
                                 break;
                             }
-                            itemBonus = itemBonus.add(
-                                getExpTokenBonus(
-                                    detail.attr[j],
-                                    userProfile.level,
-                                    _pid
-                                )
-                            );
+                            itemBonus = itemBonus.add(getExpTokenBonus(detail.attr[j], userProfile.level, _pid));
                         }
                     } else {
                         for (uint8 j = 0; j < 6; j++) {
                             if (detail.attr[j] == 0) {
                                 break;
                             }
-                            itemBonus = itemBonus.add(
-                                getMainTokenBonus(
-                                    detail.attr[j],
-                                    userProfile.level,
-                                    _pid
-                                )
-                            );
+                            itemBonus = itemBonus.add(getMainTokenBonus(detail.attr[j], userProfile.level, _pid));
                         }
                     }
                 }
             }
         }
-        
+
         if (pool.isExpToken) {
             guildBonus = guildBonus.add(getGuildBonus());
         }
-        
-        return
-            levelToBonus(userProfile.level)
-                .add(100)
-                .mul(itemBonus)
-                .mul(guildBonus)
-                .div(10000)
-                .sub(100);
+
+        return levelToBonus(userProfile.level).add(100).mul(itemBonus).mul(guildBonus).div(10000).sub(100);
     }
 
     // Get MF bonus
-    function calculateMFBonus(uint256 _pid)
-        public
-        view
-        returns (uint256)
-    {
+    function calculateMFBonus(uint256 _pid) public view returns (uint256) {
         UserProfileInfo storage userProfile = userProfileInfo[msg.sender];
         uint256 itemBonus = 0;
 
         if (userProfile.invSlotNum <= 6) {
             for (uint8 i = 0; i < userProfile.invSlotNum; i++) {
-                if (
-                    userProfile.invSlot[i] > 0 &&
-                    itemToken.ownerOf(userProfile.invSlot[i]) == msg.sender
-                ) {
-                    itemDetail storage detail =
-                        itemDetails[userProfile.invSlot[i]];
+                if (userProfile.invSlot[i] > 0 && itemToken.ownerOf(userProfile.invSlot[i]) == msg.sender) {
+                    itemDetail storage detail = itemDetails[userProfile.invSlot[i]];
                     if (detail.level > userProfile.level) {
                         continue;
                     }
@@ -885,9 +779,7 @@ contract FishingMaster is Ownable {
                         if (detail.attr[j] == 0) {
                             break;
                         }
-                        itemBonus = itemBonus.add(
-                            getMFBonus(detail.attr[j], userProfile.level, _pid)
-                        );
+                        itemBonus = itemBonus.add(getMFBonus(detail.attr[j], userProfile.level, _pid));
                     }
                 }
             }
@@ -960,8 +852,7 @@ contract FishingMaster is Ownable {
     function getNFTDropCounter(uint256 _pid) internal view returns (uint256) {
         UserInfo storage user = userInfo[_pid][msg.sender];
         if (block.number > user.lastDropBlock) {
-            uint256 rate =
-                (block.number - user.lastDropBlock) * NFT_BASE_DROP_RATE_INC;
+            uint256 rate = (block.number - user.lastDropBlock) * NFT_BASE_DROP_RATE_INC;
             if (rate > NFT_DROP_RATE_CAP) {
                 rate = NFT_DROP_RATE_CAP;
             }
@@ -976,10 +867,7 @@ contract FishingMaster is Ownable {
         uint256 _to,
         bool isExpToken
     ) internal view returns (uint256) {
-        return
-            _to.sub(_from).mul(
-                isExpToken ? EXP_BONUS_MULTIPLIER : MAIN_BONUS_MULTIPLIER
-            );
+        return _to.sub(_from).mul(isExpToken ? EXP_BONUS_MULTIPLIER : MAIN_BONUS_MULTIPLIER);
     }
 
     // Calculate pool pending rewards without checking user debt.
@@ -990,7 +878,7 @@ contract FishingMaster is Ownable {
     ) internal view returns (uint256) {
         uint256 totalAllocPoint = 0;
         uint256 cakePerBlock = 0;
-        
+
         if (isExpToken) {
             totalAllocPoint = totalAllocPointExpToken;
             cakePerBlock = expTokenPerBlock;
@@ -1001,11 +889,9 @@ contract FishingMaster is Ownable {
         if (totalAllocPoint == 0) {
             return 0;
         }
-        uint256 multiplier =
-            getMultiplier(lastRewardBlock, block.number, isExpToken);
+        uint256 multiplier = getMultiplier(lastRewardBlock, block.number, isExpToken);
 
-        return
-            multiplier.mul(cakePerBlock).mul(allocPoint).div(totalAllocPoint);
+        return multiplier.mul(cakePerBlock).mul(allocPoint).div(totalAllocPoint);
     }
 
     // Internal functions that are pure
@@ -1051,18 +937,12 @@ contract FishingMaster is Ownable {
     }
 
     // Generate a single item via itemHelper
-    function reRollAttr(uint256 ilevel, uint256 oldAttr)
-        private
-        returns (uint256)
-    {
+    function reRollAttr(uint256 ilevel, uint256 oldAttr) private returns (uint256) {
         return itemHelper.reRollAttr(ilevel, oldAttr, msg.sender);
     }
 
     // Generate a random NFT with a given random seed.
-    function genRandomNFT(address recv, uint256 userLevel)
-        private
-        returns (uint256)
-    {
+    function genRandomNFT(address recv, uint256 userLevel) private returns (uint256) {
         uint256 newToken = itemToken.mintNft(recv);
         itemDetail storage detail = itemDetails[newToken];
 
@@ -1104,12 +984,7 @@ contract FishingMaster is Ownable {
             return 0;
         }
 
-        if (
-            rand(NFT_BASE_DROP_RATE_BASE) <
-            getNFTDropCounter(_pid)
-                .mul(calculateMFBonus(_pid).add(100))
-                .div(100)
-        ) {
+        if (rand(NFT_BASE_DROP_RATE_BASE) < getNFTDropCounter(_pid).mul(calculateMFBonus(_pid).add(100)).div(100)) {
             userInfo[_pid][msg.sender].lastDropBlock = block.number;
             return genRandomNFT(msg.sender, _userLevel);
         }
