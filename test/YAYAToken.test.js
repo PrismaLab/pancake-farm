@@ -1,27 +1,26 @@
 const { assert } = require("chai");
-const { advanceBlockTo } = require('@openzeppelin/test-helpers/src/time');
+const { advanceBlockTo } = require("@openzeppelin/test-helpers/src/time");
 
-const YAYAToken = artifacts.require('YAYAToken');
+const YAYAToken = artifacts.require("YAYAToken");
 
-contract('YAYAToken', ([alice, bob, carol, dev, minter]) => {
-    beforeEach(async () => {
-        this.ppx = await YAYAToken.new({ from: minter });
-    });
+contract("YAYAToken", ([alice, bob, carol, dev, minter]) => {
+  beforeEach(async () => {
+    this.ppx = await YAYAToken.new({ from: minter });
+  });
 
+  it("mint", async () => {
+    await this.ppx.mint(alice, 1000, { from: minter });
+    assert.equal((await this.ppx.balanceOf(alice)).toString(), "1000");
+  });
 
-    it('mint', async () => {
-        await this.ppx.mint(alice, 1000, { from: minter });
-        assert.equal((await this.ppx.balanceOf(alice)).toString(), '1000');
-    });
+  it("burn", async () => {
+    await advanceBlockTo("650");
+    await this.ppx.mint(alice, 1000, { from: minter });
+    await this.ppx.mint(bob, 1000, { from: minter });
+    assert.equal((await this.ppx.totalSupply()).toString(), "2000");
+    await this.ppx.burn(alice, 200, { from: minter });
 
-    it('burn', async () => {
-        await advanceBlockTo('650');
-        await this.ppx.mint(alice, 1000, { from: minter });
-        await this.ppx.mint(bob, 1000, { from: minter });
-        assert.equal((await this.ppx.totalSupply()).toString(), '2000');
-        await this.ppx.burn(alice, 200, { from: minter });
-    
-        assert.equal((await this.ppx.balanceOf(alice)).toString(), '800');
-        assert.equal((await this.ppx.totalSupply()).toString(), '1800');
-      });
+    assert.equal((await this.ppx.balanceOf(alice)).toString(), "800");
+    assert.equal((await this.ppx.totalSupply()).toString(), "1800");
+  });
 });
