@@ -371,7 +371,7 @@ contract FishingMaster is Ownable {
         require(index < 6, "index out of range!");
         require(detail.attr[index] != 0, "No existing attr!");
 
-        detail.attr[index] = reRollAttr(detail.level, detail.attr[index]);
+        detail.attr[index] = reRollAttr(detail.level, detail.attr[index], msg.sender);
         // No longer pure random!
         detail.isRandom = false;
         expToken.burn(msg.sender, UPGRADE_NFT_PRICE);
@@ -386,16 +386,16 @@ contract FishingMaster is Ownable {
     // External functions that are view
 
     // Drop rate with modifiers, 5 decimal digit.
-    function getNFTDropRate(uint256 _pid) external view returns (uint256) {
+    function getNFTDropRate(uint256 _pid, address _user) external view returns (uint256) {
         return
-            getNFTDropCounter(_pid).mul(calculateMFBonus(_pid).add(100)).div(100).mul(1e5).div(NFT_BASE_DROP_RATE_BASE);
+            getNFTDropCounter(_pid, _user).mul(calculateMFBonus(_pid, _user).add(100)).div(100).mul(1e5).div(NFT_BASE_DROP_RATE_BASE);
     }
 
     // View function to see pending tokens on frontend.
-    function pendingCake(uint256 _pid) external view returns (uint256) {
+    function pendingCake(uint256 _pid, address _user) external view returns (uint256) {
         require(_pid < poolInfo.length, "invalid pid");
         PoolInfo storage pool = poolInfo[_pid];
-        UserInfo storage user = userInfo[_pid][msg.sender];
+        UserInfo storage user = userInfo[_pid][_user];
         uint256 accCakePerShare = pool.accCakePerShare;
 
         uint256 lpSupply = pool.totalWeightedValue;
@@ -413,26 +413,26 @@ contract FishingMaster is Ownable {
     }
 
     // Query user customize info.
-    function getCustomizeInfo() external view returns (uint256) {
-        UserProfileInfo storage userProfile = userProfileInfo[msg.sender];
+    function getCustomizeInfo(address _user) external view returns (uint256) {
+        UserProfileInfo storage userProfile = userProfileInfo[_user];
         return userProfile.customizeInfo;
     }
 
     // Query user inventory info.
-    function getInventory() external view returns (uint256[6] memory) {
-        UserProfileInfo storage userProfile = userProfileInfo[msg.sender];
+    function getInventory(address _user) external view returns (uint256[6] memory) {
+        UserProfileInfo storage userProfile = userProfileInfo[_user];
         return userProfile.invSlot;
     }
 
     // Query current level.
-    function getLevel() external view returns (uint256) {
-        UserProfileInfo storage userProfile = userProfileInfo[msg.sender];
+    function getLevel(address _user) external view returns (uint256) {
+        UserProfileInfo storage userProfile = userProfileInfo[_user];
         return userProfile.level;
     }
 
     // Query max slot number.
-    function getInvSlotNum() external view returns (uint256) {
-        UserProfileInfo storage userProfile = userProfileInfo[msg.sender];
+    function getInvSlotNum(address _user) external view returns (uint256) {
+        UserProfileInfo storage userProfile = userProfileInfo[_user];
         return userProfile.invSlotNum;
     }
 
@@ -575,7 +575,7 @@ contract FishingMaster is Ownable {
             newDeposit = true;
         }
         uint256 oldWeight = user.weight;
-        user.weight = user.amount.mul((100 + calculateWeightBonus(_pid))).div(100);
+        user.weight = user.amount.mul((100 + calculateWeightBonus(_pid, msg.sender))).div(100);
 
         pool.totalWeightedValue = pool.totalWeightedValue.sub(oldWeight).add(user.weight);
 
@@ -593,10 +593,10 @@ contract FishingMaster is Ownable {
         // NFT
         if (existingDeposit) {
             // Positive balance before action, need roll
-            checkNFTDrop(_pid, userProfile.level, false);
+            checkNFTDrop(_pid, userProfile.level, false, msg.sender);
         } else if (newDeposit) {
             // Zero balance before action but non-zero after, reset counter
-            checkNFTDrop(_pid, userProfile.level, true);
+            checkNFTDrop(_pid, userProfile.level, true, msg.sender);
         }
     }
 
@@ -620,7 +620,7 @@ contract FishingMaster is Ownable {
             }
         }
         if (_amount > 0) {
-            uint256 penalty = getWithdrawPenalty(_pid, _amount);
+            uint256 penalty = getWithdrawPenalty(_pid, _amount, msg.sender);
             user.amount = user.amount.sub(_amount);
             if (penalty > 0 && treasury_addr != address(0)) {
                 pool.lpToken.safeTransfer(address(treasury_addr), penalty);
@@ -630,7 +630,7 @@ contract FishingMaster is Ownable {
             }      
         }
         uint256 oldWeight = user.weight;
-        user.weight = user.amount.mul((100 + calculateWeightBonus(_pid))).div(100);
+        user.weight = user.amount.mul((100 + calculateWeightBonus(_pid, msg.sender))).div(100);
 
         pool.totalWeightedValue = pool.totalWeightedValue.sub(oldWeight).add(user.weight);
 
@@ -643,7 +643,7 @@ contract FishingMaster is Ownable {
         // NFT
         if (existingDeposit) {
             // Positive balance before action, need roll
-            checkNFTDrop(_pid, userProfile.level, false);
+            checkNFTDrop(_pid, userProfile.level, false, msg.sender);
         }
     }
 
@@ -681,11 +681,11 @@ contract FishingMaster is Ownable {
     // Public functions that are view
 
     // Calculate withdraw penalty.
-    function getWithdrawPenalty(uint256 _pid, uint256 amountToWithdraw) public view returns (uint256) {
+    function getWithdrawPenalty(uint256 _pid, uint256 amountToWithdraw, address _user) public view returns (uint256) {
         if (treasury_addr == address(0) || LOCK_PERIOD == 0 || LOCK_PENALTY == 0) {
             return 0;
         }
-        UserInfo storage user = userInfo[_pid][msg.sender];
+        UserInfo storage user = userInfo[_pid][_user];
         if (block.timestamp >= user.lastDepositTime.add(LOCK_PERIOD)) {
             return 0;
         }
@@ -741,8 +741,8 @@ contract FishingMaster is Ownable {
     }
 
     // Get Exp comsumption for level up.
-    function getGuildBonus() public view returns (uint256) {
-        UserProfileInfo storage userProfile = userProfileInfo[msg.sender];
+    function getGuildBonus(address _user) public view returns (uint256) {
+        UserProfileInfo storage userProfile = userProfileInfo[_user];
         // Not in any guild
         if (userProfile.guildMaster == address(0)) {
             return 0;
@@ -759,16 +759,16 @@ contract FishingMaster is Ownable {
         } else if (gmProfile.guildDeposit > 100000) {
             bonus = 10;
         }
-        if (bonus > 0 && userProfile.guildMaster == msg.sender) {
+        if (bonus > 0 && userProfile.guildMaster == _user) {
             bonus = bonus + 5;
         }
         return bonus;
     }
 
     // Calculate bonus from level and items. Returns percentage.
-    function calculateWeightBonus(uint256 _pid) public view returns (uint256) {
+    function calculateWeightBonus(uint256 _pid, address _user) public view returns (uint256) {
         require(_pid < poolInfo.length, "invalid pid");
-        UserProfileInfo storage userProfile = userProfileInfo[msg.sender];
+        UserProfileInfo storage userProfile = userProfileInfo[_user];
         PoolInfo storage pool = poolInfo[_pid];
 
         uint256 itemBonus = 100;
@@ -776,7 +776,7 @@ contract FishingMaster is Ownable {
 
         if (userProfile.invSlotNum <= 6) {
             for (uint8 i = 0; i < userProfile.invSlotNum; i++) {
-                if (userProfile.invSlot[i] > 0 && itemToken.ownerOf(userProfile.invSlot[i]) == msg.sender) {
+                if (userProfile.invSlot[i] > 0 && itemToken.ownerOf(userProfile.invSlot[i]) == _user) {
                     itemDetail storage detail = itemDetails[userProfile.invSlot[i]];
                     if (detail.level > userProfile.level) {
                         continue;
@@ -801,20 +801,20 @@ contract FishingMaster is Ownable {
         }
 
         if (pool.isExpToken) {
-            guildBonus = guildBonus.add(getGuildBonus());
+            guildBonus = guildBonus.add(getGuildBonus(_user));
         }
 
         return levelToBonus(userProfile.level).add(100).mul(itemBonus).mul(guildBonus).div(10000).sub(100);
     }
 
     // Get MF bonus
-    function calculateMFBonus(uint256 _pid) public view returns (uint256) {
-        UserProfileInfo storage userProfile = userProfileInfo[msg.sender];
+    function calculateMFBonus(uint256 _pid, address _user) public view returns (uint256) {
+        UserProfileInfo storage userProfile = userProfileInfo[_user];
         uint256 itemBonus = 0;
 
         if (userProfile.invSlotNum <= 6) {
             for (uint8 i = 0; i < userProfile.invSlotNum; i++) {
-                if (userProfile.invSlot[i] > 0 && itemToken.ownerOf(userProfile.invSlot[i]) == msg.sender) {
+                if (userProfile.invSlot[i] > 0 && itemToken.ownerOf(userProfile.invSlot[i]) == _user) {
                     itemDetail storage detail = itemDetails[userProfile.invSlot[i]];
                     if (detail.level > userProfile.level) {
                         continue;
@@ -893,8 +893,8 @@ contract FishingMaster is Ownable {
     // Internal functions that are view
 
     // Get NFT Drop rate counter for now.
-    function getNFTDropCounter(uint256 _pid) internal view returns (uint256) {
-        UserInfo storage user = userInfo[_pid][msg.sender];
+    function getNFTDropCounter(uint256 _pid, address _user) internal view returns (uint256) {
+        UserInfo storage user = userInfo[_pid][_user];
         if (block.number > user.lastDropBlock) {
             uint256 rate = (block.number - user.lastDropBlock) * NFT_BASE_DROP_RATE_INC;
             if (rate > NFT_DROP_RATE_CAP) {
@@ -976,13 +976,13 @@ contract FishingMaster is Ownable {
     // Mainly for local helper functions
 
     // Generate a single item via itemHelper
-    function genAttr(uint256 level) private returns (uint256) {
-        return itemHelper.genAttr(level, msg.sender);
+    function genAttr(uint256 level, address _user) private returns (uint256) {
+        return itemHelper.genAttr(level, _user);
     }
 
     // Generate a single item via itemHelper
-    function reRollAttr(uint256 ilevel, uint256 oldAttr) private returns (uint256) {
-        return itemHelper.reRollAttr(ilevel, oldAttr, msg.sender);
+    function reRollAttr(uint256 ilevel, uint256 oldAttr, address _user) private returns (uint256) {
+        return itemHelper.reRollAttr(ilevel, oldAttr, _user);
     }
 
     // Generate a random NFT with a given random seed.
@@ -993,7 +993,7 @@ contract FishingMaster is Ownable {
         emit MintNFT(recv, newToken);
 
         // Pure random function version 0
-        detail.template = rand(10);
+        detail.template = rand(10, recv);
         detail.isRandom = true;
         // We do not plan to change the level logic so we leave it here.
         uint256 minLevel = 0;
@@ -1002,13 +1002,13 @@ contract FishingMaster is Ownable {
         }
         uint256 maxLevel = userLevel.add(10);
 
-        uint256 level = rand(minLevel, maxLevel);
+        uint256 level = rand(minLevel, maxLevel, recv);
         detail.level = level - (level % 5) + 5;
 
         // genAttr actually will ask itemHelper to generate attributes.
         for (uint256 i = 0; i < 6; i++) {
-            detail.attr[i] = genAttr(detail.level);
-            if (rand(256) >= 2) {
+            detail.attr[i] = genAttr(detail.level, recv);
+            if (rand(256, recv) >= 2) {
                 break;
             }
         }
@@ -1020,31 +1020,32 @@ contract FishingMaster is Ownable {
     function checkNFTDrop(
         uint256 _pid,
         uint256 _userLevel,
-        bool resetCounter
+        bool resetCounter,
+        address _user
     ) private returns (uint256) {
         // Reset last block without roll.
         if (resetCounter) {
-            userInfo[_pid][msg.sender].lastDropBlock = block.number;
+            userInfo[_pid][_user].lastDropBlock = block.number;
             return 0;
         }
 
-        if (rand(NFT_BASE_DROP_RATE_BASE) < getNFTDropCounter(_pid).mul(calculateMFBonus(_pid).add(100)).div(100)) {
-            userInfo[_pid][msg.sender].lastDropBlock = block.number;
-            return genRandomNFT(msg.sender, _userLevel);
+        if (rand(NFT_BASE_DROP_RATE_BASE, _user) < getNFTDropCounter(_pid, _user).mul(calculateMFBonus(_pid, _user).add(100)).div(100)) {
+            userInfo[_pid][_user].lastDropBlock = block.number;
+            return genRandomNFT(_user, _userLevel);
         }
-        userInfo[_pid][msg.sender].lastDropBlock = block.number;
+        userInfo[_pid][_user].lastDropBlock = block.number;
         return 0;
     }
 
     // Random mod _mod using helper functions
-    function rand(uint256 _mod) private returns (uint256) {
+    function rand(uint256 _mod, address _user) private returns (uint256) {
         // Helper will do sanity check.
-        return itemHelper.randMod(_mod, msg.sender);
+        return itemHelper.randMod(_mod, _user);
     }
 
     // Random in [lower, upper] using helper functions
-    function rand(uint256 _lower, uint256 _upper) private returns (uint256) {
+    function rand(uint256 _lower, uint256 _upper, address _user) private returns (uint256) {
         // Helper will do sanity check.
-        return itemHelper.rand(_lower, _upper, msg.sender);
+        return itemHelper.rand(_lower, _upper, _user);
     }
 }

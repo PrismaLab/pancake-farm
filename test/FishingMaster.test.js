@@ -93,7 +93,7 @@ contract("FishingMaster", ([alice, bob, carol, dick, eva, dev, treasury, minter]
     await this.chef.deposit(0, "20", { from: alice });
     await time.advanceBlockTo("173");
     assert.equal(
-      (await this.chef.pendingCake(0, { from: alice })).toString(),
+      (await this.chef.pendingCake(0, alice, { from: alice })).toString(),
       "350877192982456140350"
     );
     await this.chef.withdraw(0, "20", { from: alice });
@@ -134,14 +134,14 @@ contract("FishingMaster", ([alice, bob, carol, dick, eva, dev, treasury, minter]
     await this.lp1.approve(this.chef.address, "100", { from: alice });
     await this.chef.deposit(0, "20", { from: alice });
     assert.equal(
-      (await this.chef.getNFTDropRate(0, { from: alice })).toString(),
+      (await this.chef.getNFTDropRate(0, alice, { from: alice })).toString(),
       "0"
     );
     await this.chef.deposit(0, "0", { from: alice });
     await this.chef.deposit(0, "40", { from: alice });
     await this.chef.deposit(0, "0", { from: alice });
     assert.equal(
-      (await this.chef.getNFTDropRate(0, { from: alice })).toString(),
+      (await this.chef.getNFTDropRate(0, alice, { from: alice })).toString(),
       "0"
     );
     assert.equal((await this.lp1.balanceOf(alice)).toString(), "1940");
@@ -195,14 +195,14 @@ contract("FishingMaster", ([alice, bob, carol, dick, eva, dev, treasury, minter]
     await this.lp1.approve(this.chef.address, "100", { from: alice });
     await this.chef.deposit(0, "20", { from: alice });
     assert.equal(
-      (await this.chef.getNFTDropRate(0, { from: alice })).valueOf().toString(),
+      (await this.chef.getNFTDropRate(0, alice, { from: alice })).valueOf().toString(),
       "0"
     );
     await this.chef.deposit(0, "0", { from: alice });
     await this.chef.deposit(0, "40", { from: alice });
     await this.chef.deposit(0, "0", { from: alice });
     assert.equal(
-      (await this.chef.getNFTDropRate(0, { from: alice })).valueOf().toString(),
+      (await this.chef.getNFTDropRate(0, alice, { from: alice })).valueOf().toString(),
       "0"
     );
     assert.equal((await this.lp1.balanceOf(alice)).toString(), "1940");
@@ -345,18 +345,18 @@ contract("FishingMaster", ([alice, bob, carol, dick, eva, dev, treasury, minter]
     // Equip slot
 
     assert.equal(
-      (await this.chef.getInvSlotNum({ from: carol })).valueOf(),
+      (await this.chef.getInvSlotNum(carol, { from: carol })).valueOf(),
       "0"
     );
     await this.chef.unlockItemSlot({ from: carol });
     assert.equal(
-      (await this.chef.getInvSlotNum({ from: carol })).valueOf(),
+      (await this.chef.getInvSlotNum(carol, { from: carol })).valueOf(),
       "1"
     );
 
     // Equip
 
-    let inv = await this.chef.getInventory({ from: carol }).valueOf();
+    let inv = await this.chef.getInventory(carol,{ from: carol }).valueOf();
     assert.equal(inv[0], 0);
     assert.equal(inv[1], 0);
     assert.equal(inv[2], 0);
@@ -370,7 +370,7 @@ contract("FishingMaster", ([alice, bob, carol, dick, eva, dev, treasury, minter]
     );
 
     await this.chef.equipNFT(0, 2, { from: carol });
-    inv = await this.chef.getInventory({ from: carol }).valueOf();
+    inv = await this.chef.getInventory(carol,{ from: carol }).valueOf();
     assert.equal(inv[0], 2);
     assert.equal(inv[1], 0);
     assert.equal(inv[2], 0);
@@ -384,7 +384,7 @@ contract("FishingMaster", ([alice, bob, carol, dick, eva, dev, treasury, minter]
     );
 
     await this.chef.equipNFT(0, 0, { from: carol });
-    inv = await this.chef.getInventory({ from: carol }).valueOf();
+    inv = await this.chef.getInventory(carol,{ from: carol }).valueOf();
     assert.equal(inv[0], 0);
     assert.equal(inv[1], 0);
     assert.equal(inv[2], 0);
@@ -585,14 +585,14 @@ contract("FishingMaster", ([alice, bob, carol, dick, eva, dev, treasury, minter]
     });
 
     // zero is special
-    assert.equal((await this.chef.getLevel({ from: eva })).valueOf(), "0");
+    assert.equal((await this.chef.getLevel(eva, { from: eva })).valueOf(), "0");
     assert.equal(
       (await this.chef.getLevelUpExp(0, { from: eva })).valueOf(),
       "0"
     );
     await this.chef.levelUp({ from: eva });
     await this.chef.unlockItemSlot({ from: eva });
-    assert.equal((await this.chef.getInvSlotNum({ from: eva })).valueOf(), "1");
+    assert.equal((await this.chef.getInvSlotNum(eva, { from: eva })).valueOf(), "1");
     assert.equal(
       (await this.ppx.balanceOf(eva)).toString(),
       balance.toString()
@@ -617,7 +617,7 @@ contract("FishingMaster", ([alice, bob, carol, dick, eva, dev, treasury, minter]
         balance = balance.sub(cost);
         await this.chef.unlockItemSlot({ from: eva });
         assert.equal(
-          (await this.chef.getInvSlotNum({ from: eva })).valueOf(),
+          (await this.chef.getInvSlotNum(eva, { from: eva })).valueOf(),
           "2"
         );
       } else if (level == 30) {
@@ -638,7 +638,7 @@ contract("FishingMaster", ([alice, bob, carol, dick, eva, dev, treasury, minter]
         balance = balance.sub(cost);
         await this.chef.unlockItemSlot({ from: eva });
         assert.equal(
-          (await this.chef.getInvSlotNum({ from: eva })).valueOf(),
+          (await this.chef.getInvSlotNum(eva, { from: eva })).valueOf(),
           "3"
         );
       } else if (level == 40) {
@@ -659,7 +659,7 @@ contract("FishingMaster", ([alice, bob, carol, dick, eva, dev, treasury, minter]
         balance = balance.sub(cost);
         await this.chef.unlockItemSlot({ from: eva });
         assert.equal(
-          (await this.chef.getInvSlotNum({ from: eva })).valueOf(),
+          (await this.chef.getInvSlotNum(eva, { from: eva })).valueOf(),
           "4"
         );
       } else if (level == 50) {
@@ -680,7 +680,7 @@ contract("FishingMaster", ([alice, bob, carol, dick, eva, dev, treasury, minter]
         balance = balance.sub(cost);
         await this.chef.unlockItemSlot({ from: eva });
         assert.equal(
-          (await this.chef.getInvSlotNum({ from: eva })).valueOf(),
+          (await this.chef.getInvSlotNum(eva, { from: eva })).valueOf(),
           "5"
         );
       } else if (level == 60) {
@@ -701,7 +701,7 @@ contract("FishingMaster", ([alice, bob, carol, dick, eva, dev, treasury, minter]
         balance = balance.sub(cost);
         await this.chef.unlockItemSlot({ from: eva });
         assert.equal(
-          (await this.chef.getInvSlotNum({ from: eva })).valueOf(),
+          (await this.chef.getInvSlotNum(eva, { from: eva })).valueOf(),
           "6"
         );
       }
@@ -710,7 +710,7 @@ contract("FishingMaster", ([alice, bob, carol, dick, eva, dev, treasury, minter]
         "1000000000000000000"
       );
       assert.equal(
-        (await this.chef.getLevel({ from: eva })).valueOf(),
+        (await this.chef.getLevel(eva, { from: eva })).valueOf(),
         level.toString()
       );
       assert.equal(
@@ -884,17 +884,17 @@ contract("FishingMaster", ([alice, bob, carol, dick, eva, dev, treasury, minter]
 
     // updateCustomizeInfo
     assert.equal(
-      (await this.chef.getCustomizeInfo({ from: alice })).valueOf(),
+      (await this.chef.getCustomizeInfo(alice,{ from: alice })).valueOf(),
       "0"
     );
     await this.chef.updateCustomizeInfo("2000000000000000000", { from: alice });
     assert.equal(
-      (await this.chef.getCustomizeInfo()).valueOf(),
+      (await this.chef.getCustomizeInfo(alice)).valueOf(),
       "2000000000000000000"
     );
     await this.chef.updateCustomizeInfo("1000000000000000000", { from: alice });
     assert.equal(
-      (await this.chef.getCustomizeInfo()).valueOf(),
+      (await this.chef.getCustomizeInfo(alice)).valueOf(),
       "1000000000000000000"
     );
 
