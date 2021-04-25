@@ -86,6 +86,9 @@ contract("FishingMaster", ([alice, bob, carol, dick, eva, dev, treasury, minter]
 
     await this.chef.set(0, "2000", true, { from: minter });
 
+    // 2000/5700
+    assert.equal((await this.chef.poolWeight(0)).toString(), "3508");
+    
     await time.advanceBlockTo("170");
     await this.lp1.approve(this.chef.address, "1000", { from: alice });
     assert.equal((await this.ppx.balanceOf(alice)).toString(), "0");

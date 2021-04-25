@@ -442,6 +442,25 @@ contract FishingMaster is Ownable {
         return detail;
     }
 
+    // Query pool weight.
+    function poolWeight(uint256 _pid) external view returns (uint256) {
+        require(_pid < poolInfo.length, "invalid pid");
+        PoolInfo storage pool = poolInfo[_pid];
+
+        uint256 totalAllocPoint = 0;
+
+        if (pool.isExpToken) {
+            totalAllocPoint = totalAllocPointExpToken;
+        } else {
+            totalAllocPoint = totalAllocPointMainToken;
+        }
+        if (totalAllocPoint == 0) {
+            return 0;
+        }
+
+        return pool.allocPoint.mul(10000).div(totalAllocPoint);
+    }
+
     // Public functions
 
     // Migrate lp token to another lp contract. Can be called by anyone. We trust that migrator contract is good.
