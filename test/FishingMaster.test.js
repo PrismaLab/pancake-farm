@@ -7,7 +7,7 @@ const FishingMaster = artifacts.require("FishingMaster");
 const ItemHelper = artifacts.require("ItemHelper");
 const MockBEP20 = artifacts.require("testlibs/MockBEP20");
 
-contract("FishingMaster", ([alice, bob, carol, dick, eva, dev, minter]) => {
+contract("FishingMaster", ([alice, bob, carol, dick, eva, dev, treasury, minter]) => {
   beforeEach(async () => {
     this.ppx = await YAYAToken.new({ from: minter });
     this.ppy = await PAPAToken.new("1000000000000000000000000000", {
@@ -102,6 +102,19 @@ contract("FishingMaster", ([alice, bob, carol, dick, eva, dev, minter]) => {
       (await this.ppx.balanceOf(alice)).toString(),
       "701754385964912280701"
     );
+
+    // a long time
+    await this.chef.updateLockPeriod(1000000000, { from: minter });
+    // half
+    await this.chef.updateLockPenalty(500000, { from: minter });
+
+    await this.chef.setTreasury(treasury, { from: minter });
+
+    await this.chef.deposit(0, "20", { from: alice });
+    await this.chef.withdraw(0, "20", { from: alice });
+    assert.equal((await this.lp1.balanceOf(alice)).toString(), "1990");
+    assert.equal((await this.lp1.balanceOf(treasury)).toString(), "10");
+
   });
 
   it("deposit/withdraw exp token", async () => {
@@ -884,6 +897,57 @@ contract("FishingMaster", ([alice, bob, carol, dick, eva, dev, minter]) => {
       (await this.chef.getCustomizeInfo()).valueOf(),
       "1000000000000000000"
     );
+
+    // updateLockPeriod
+    assert.equal(
+        (await this.chef.LOCK_PERIOD({ from: alice })).valueOf(),
+        "0"
+      );
+      await expectRevert(
+        this.chef.updateLockPeriod("10", { from: alice }),
+        "Ownable: caller is not the owner"
+      );
+      await this.chef.updateLockPeriod("2000000000000000000", { from: minter });
+      assert.equal(
+        (await this.chef.LOCK_PERIOD()).valueOf(),
+        "2000000000000000000"
+      );
+      await this.chef.updateLockPeriod("1000000000000000000", { from: minter });
+      assert.equal(
+        (await this.chef.LOCK_PERIOD()).valueOf(),
+        "1000000000000000000"
+      );
+
+
+    // updateLockPenalty
+    assert.equal(
+        (await this.chef.LOCK_PENALTY({ from: alice })).valueOf(),
+        "0"
+      );
+      await expectRevert(
+        this.chef.updateLockPeriod("10", { from: alice }),
+        "Ownable: caller is not the owner"
+      );
+      await this.chef.updateLockPenalty("1234", { from: minter });
+      assert.equal(
+        (await this.chef.LOCK_PENALTY()).valueOf(),
+        "1234"
+      );
+      await this.chef.updateLockPenalty("4321", { from: minter });
+      assert.equal(
+        (await this.chef.LOCK_PENALTY()).valueOf(),
+        "4321"
+      );
+
+
+    // Treasury
+    assert.equal((await this.chef.treasury_addr()).valueOf(), '0x0000000000000000000000000000000000000000');
+    await expectRevert(this.chef.setTreasury(bob, { from: bob }), "Ownable: caller is not the owner");
+    await this.chef.setTreasury(treasury, { from: minter });
+    assert.equal((await this.chef.treasury_addr()).valueOf(), treasury);
+
+
+
 
     // devaddr
 

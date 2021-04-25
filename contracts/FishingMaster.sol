@@ -29,7 +29,7 @@ contract FishingMaster is Ownable {
         uint256 weight; // How many weighted LP tokens the user has provided.
         uint256 rewardDebt; // Reward debt. See explanation below.
         uint256 lastDropBlock; // Last block when a item drop check is rolled.
-
+        uint256 lastDepositTime; // Timestamp of last deposit.
         // Calculation algorithm is ispired by PancakeSwap, so we kept the name accCakePerShare :)
         // From pancake: We do some fancy math here. Basically, any point in time, the amount of Tokens
         // entitled to a user but is pending to be distributed is:
@@ -87,6 +87,9 @@ contract FishingMaster is Ownable {
     IMigratorMaster public migrator;
     // Dev address.
     address public devaddr;
+    // Treasury address.
+    // We need this to seperate tokens belongs to community and to the contract itself.
+    address public treasury_addr;
 
     // Exp tokens (PAPA) created per block.
     // Note: the unit is 1 token, not the min unit which is 1e-18 token
@@ -102,6 +105,10 @@ contract FishingMaster is Ownable {
     uint256 public MAIN_BONUS_MULTIPLIER;
     // The block number when tokens mining starts.
     uint256 public startBlock;
+    // Lock period.
+    uint256 public LOCK_PERIOD;
+    // Lock penalty. In 1/1000000;
+    uint256 public LOCK_PENALTY;
 
     // Level cap for now.
     uint256 public MAX_LEVEL = 20;
@@ -180,6 +187,16 @@ contract FishingMaster is Ownable {
         MAX_LEVEL = max_level;
     }
 
+    // Update lock period.
+    function updateLockPeriod(uint256 lock_period) external onlyOwner {
+        LOCK_PERIOD = lock_period;
+    }
+
+    // Update lock penalty.
+    function updateLockPenalty(uint256 lock_penalty) external onlyOwner {
+        LOCK_PENALTY = lock_penalty;
+    }
+
     // Update random nft price.
     function updateRandomNftPrice(uint256 price) external onlyOwner {
         RANDOM_NFT_PRICE = price;
@@ -205,6 +222,11 @@ contract FishingMaster is Ownable {
     function dev(address _devaddr) external {
         require(msg.sender == devaddr, "dev: wut?");
         devaddr = _devaddr;
+    }
+
+    // Update treasury address by the owner.
+    function setTreasury(address _treasury_addr) external onlyOwner {
+        treasury_addr = _treasury_addr;
     }
 
     // Set the migrator contract. Can only be called by the owner.
@@ -559,6 +581,10 @@ contract FishingMaster is Ownable {
 
         user.rewardDebt = user.weight.mul(pool.accCakePerShare).div(1e12);
 
+        if (newDeposit) {
+            user.lastDepositTime = block.timestamp;
+        }
+
         // Guild
         guildDeposit(_amount);
 
@@ -594,8 +620,14 @@ contract FishingMaster is Ownable {
             }
         }
         if (_amount > 0) {
+            uint256 penalty = getWithdrawPenalty(_pid, _amount);
             user.amount = user.amount.sub(_amount);
-            pool.lpToken.safeTransfer(address(msg.sender), _amount);
+            if (penalty > 0 && treasury_addr != address(0)) {
+                pool.lpToken.safeTransfer(address(treasury_addr), penalty);
+                pool.lpToken.safeTransfer(address(msg.sender), _amount.sub(penalty));
+            } else {
+                pool.lpToken.safeTransfer(address(msg.sender), _amount);
+            }      
         }
         uint256 oldWeight = user.weight;
         user.weight = user.amount.mul((100 + calculateWeightBonus(_pid))).div(100);
@@ -647,6 +679,18 @@ contract FishingMaster is Ownable {
     }
 
     // Public functions that are view
+
+    // Calculate withdraw penalty.
+    function getWithdrawPenalty(uint256 _pid, uint256 amountToWithdraw) public view returns (uint256) {
+        if (treasury_addr == address(0) || LOCK_PERIOD == 0 || LOCK_PENALTY == 0) {
+            return 0;
+        }
+        UserInfo storage user = userInfo[_pid][msg.sender];
+        if (block.timestamp >= user.lastDepositTime.add(LOCK_PERIOD)) {
+            return 0;
+        }
+        return amountToWithdraw.mul(LOCK_PENALTY).div(1000000);
+    }
 
     // Get Exp comsumption for unlocking slot.
     function getUnlockSlotExp(uint256 _currentSlot) public view returns (uint256) {
