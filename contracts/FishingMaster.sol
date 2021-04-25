@@ -388,7 +388,9 @@ contract FishingMaster is Ownable {
     // Drop rate with modifiers, 5 decimal digit.
     function getNFTDropRate(uint256 _pid, address _user) external view returns (uint256) {
         return
-            getNFTDropCounter(_pid, _user).mul(calculateMFBonus(_pid, _user).add(100)).div(100).mul(1e5).div(NFT_BASE_DROP_RATE_BASE);
+            getNFTDropCounter(_pid, _user).mul(calculateMFBonus(_pid, _user).add(100)).div(100).mul(1e5).div(
+                NFT_BASE_DROP_RATE_BASE
+            );
     }
 
     // View function to see pending tokens on frontend.
@@ -646,7 +648,7 @@ contract FishingMaster is Ownable {
                 pool.lpToken.safeTransfer(address(msg.sender), _amount.sub(penalty));
             } else {
                 pool.lpToken.safeTransfer(address(msg.sender), _amount);
-            }      
+            }
         }
         uint256 oldWeight = user.weight;
         user.weight = user.amount.mul((100 + calculateWeightBonus(_pid, msg.sender))).div(100);
@@ -700,7 +702,11 @@ contract FishingMaster is Ownable {
     // Public functions that are view
 
     // Calculate withdraw penalty.
-    function getWithdrawPenalty(uint256 _pid, uint256 amountToWithdraw, address _user) public view returns (uint256) {
+    function getWithdrawPenalty(
+        uint256 _pid,
+        uint256 amountToWithdraw,
+        address _user
+    ) public view returns (uint256) {
         if (treasury_addr == address(0) || LOCK_PERIOD == 0 || LOCK_PENALTY == 0) {
             return 0;
         }
@@ -1000,7 +1006,23 @@ contract FishingMaster is Ownable {
     }
 
     // Generate a single item via itemHelper
-    function reRollAttr(uint256 ilevel, uint256 oldAttr, address _user) private returns (uint256) {
+    function genRandomItem(uint256 level, address _user)
+        private
+        returns (
+            uint256,
+            uint256,
+            uint256[6] memory
+        )
+    {
+        return itemHelper.genRandomItem(level, _user);
+    }
+
+    // Generate a single item via itemHelper
+    function reRollAttr(
+        uint256 ilevel,
+        uint256 oldAttr,
+        address _user
+    ) private returns (uint256) {
         return itemHelper.reRollAttr(ilevel, oldAttr, _user);
     }
 
@@ -1011,25 +1033,16 @@ contract FishingMaster is Ownable {
 
         emit MintNFT(recv, newToken);
 
-        // Pure random function version 0
-        detail.template = rand(10, recv);
-        detail.isRandom = true;
-        // We do not plan to change the level logic so we leave it here.
-        uint256 minLevel = 0;
-        if (userLevel > 10) {
-            minLevel = userLevel.sub(10);
-        }
-        uint256 maxLevel = userLevel.add(10);
+        (uint256 iLevel, uint256 iTemplate, uint256[6] memory iAttr) = genRandomItem(userLevel, recv);
 
-        uint256 level = rand(minLevel, maxLevel, recv);
-        detail.level = level - (level % 5) + 5;
+        // Pure random function version 0
+        detail.template = iTemplate;
+        detail.isRandom = true;
+        detail.level = iLevel;
 
         // genAttr actually will ask itemHelper to generate attributes.
         for (uint256 i = 0; i < 6; i++) {
-            detail.attr[i] = genAttr(detail.level, recv);
-            if (rand(256, recv) >= 2) {
-                break;
-            }
+            detail.attr[i] = iAttr[i];
         }
 
         return newToken;
@@ -1048,7 +1061,10 @@ contract FishingMaster is Ownable {
             return 0;
         }
 
-        if (rand(NFT_BASE_DROP_RATE_BASE, _user) < getNFTDropCounter(_pid, _user).mul(calculateMFBonus(_pid, _user).add(100)).div(100)) {
+        if (
+            rand(NFT_BASE_DROP_RATE_BASE, _user) <
+            getNFTDropCounter(_pid, _user).mul(calculateMFBonus(_pid, _user).add(100)).div(100)
+        ) {
             userInfo[_pid][_user].lastDropBlock = block.number;
             return genRandomNFT(_user, _userLevel);
         }
@@ -1059,11 +1075,15 @@ contract FishingMaster is Ownable {
     // Random mod _mod using helper functions
     function rand(uint256 _mod, address _user) private returns (uint256) {
         // Helper will do sanity check.
-        return itemHelper.randMod(_mod, _user);
+        return itemHelper.rand(_mod, _user);
     }
 
     // Random in [lower, upper] using helper functions
-    function rand(uint256 _lower, uint256 _upper, address _user) private returns (uint256) {
+    function rand(
+        uint256 _lower,
+        uint256 _upper,
+        address _user
+    ) private returns (uint256) {
         // Helper will do sanity check.
         return itemHelper.rand(_lower, _upper, _user);
     }

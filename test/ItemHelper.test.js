@@ -11,10 +11,10 @@ contract("ItemHelper", ([alice, bob, carol, dev, minter]) => {
   it("rand", async () => {
     // Non-view function does not return result to direct external calls.
     // So we just test exceptions here.
-    await this.itemHelper.randMod(5, alice, { from: minter });
+    await this.itemHelper.rand(5, alice, { from: minter });
 
     await expectRevert(
-      this.itemHelper.randMod(0, alice, { from: bob }),
+      this.itemHelper.rand(0, alice, { from: bob }),
       "rand: mod 0"
     );
 

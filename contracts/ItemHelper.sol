@@ -62,6 +62,36 @@ contract ItemHelper {
         return 0;
     }
 
+    function genRandomItem(uint256 userLevel, address _sender)
+        public
+        returns (
+            uint256,
+            uint256,
+            uint256[6] memory
+        )
+    {
+        // Pure random function version 0
+        uint256 template = rand(10, _sender);
+        // We do not plan to change the level logic so we leave it here.
+        uint256 minLevel = 0;
+        if (userLevel > 10) {
+            minLevel = userLevel.sub(10);
+        }
+        uint256 maxLevel = userLevel.add(10);
+
+        uint256 level = rand(minLevel, maxLevel, _sender);
+        level = level - (level % 5) + 5;
+        uint256[6] memory attr;
+        // genAttr actually will ask itemHelper to generate attributes.
+        for (uint256 i = 0; i < 6; i++) {
+            attr[i] = genAttr(level, _sender);
+            if (rand(256, _sender) >= 2) {
+                break;
+            }
+        }
+        return (level, template, attr);
+    }
+
     // Generate a single attr.
     function genAttr(uint256 level, address _sender) public returns (uint256) {
         if (level == 0) {
@@ -111,7 +141,7 @@ contract ItemHelper {
 
     // Defining a function to generate
     // a random number mod modulus
-    function randMod(uint256 _modulus, address _sender) public returns (uint256) {
+    function rand(uint256 _modulus, address _sender) public returns (uint256) {
         require(_modulus > 0, "rand: mod 0");
         return rand(_sender) % _modulus;
     }
@@ -124,6 +154,6 @@ contract ItemHelper {
         address _sender
     ) public returns (uint256) {
         require(lower <= upper, "rand: lower bound must less or equal to upper bound");
-        return randMod(upper - lower + 1, _sender) + lower;
+        return rand(upper - lower + 1, _sender) + lower;
     }
 }
