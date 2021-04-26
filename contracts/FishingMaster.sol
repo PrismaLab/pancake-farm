@@ -69,7 +69,8 @@ contract FishingMaster is Ownable {
         uint256 guildWeight; // Total weighted balance of the pool.
     }
 
-    // Item info, maybe it should belongs to the ItemNFT implementation, but we put it here to have more centralized control.
+    // Item info, maybe it should belongs to the ItemNFT implementation,
+    // but we put it here to have more centralized control... At least for now.
     struct ItemDetail {
         uint256 level; // Item level as well as the level requirement.
         bool isRandom; // Whether it is random. A random master piece will be a true wonder.
@@ -413,7 +414,7 @@ contract FishingMaster is Ownable {
             uint256 cakeReward = calculateReward(pool.isExpToken, pool.allocPoint, pool.lastRewardBlock);
             accCakePerShare = accCakePerShare.add(cakeReward.mul(1e12).div(lpSupply));
         }
-        return user.amount.mul(accCakePerShare).div(1e12).sub(user.rewardDebt);
+        return user.weight.mul(accCakePerShare).div(1e12).sub(user.rewardDebt);
     }
 
     // Query pool size.
@@ -757,15 +758,15 @@ contract FishingMaster is Ownable {
         if (_currentSlot == 0) {
             return 0;
         } else if (_currentSlot == 1) {
-            return 21;
+            return 20;
         } else if (_currentSlot == 2) {
-            return 31;
+            return 30;
         } else if (_currentSlot == 3) {
-            return 41;
+            return 40;
         } else if (_currentSlot == 4) {
-            return 51;
+            return 50;
         } else if (_currentSlot == 5) {
-            return 61;
+            return 60;
         }
         // Internal calls should already guarded against slot >= 6 cases.
         // It should be fine to return 0 to external calls (to save some error handling code) as this is just a view.
@@ -856,7 +857,7 @@ contract FishingMaster is Ownable {
         PoolInfo storage pool = poolInfo[_pid];
 
         uint256 itemBonus = uint256(100).add(calculateItemBonus(_pid, _user));
-        
+
         uint256 guildBonus = 100;
 
         // TODO: check if this is the case!!!

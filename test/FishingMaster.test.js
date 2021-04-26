@@ -602,7 +602,7 @@ contract("FishingMaster", ([alice, bob, carol, dick, eva, dev, treasury, minter]
     );
 
     for (level = 1; level < 62; level++) {
-      if (level == 20) {
+      if (level == 19) {
         await expectRevert(
           this.chef.unlockItemSlot({ from: eva }),
           "No enough level."
@@ -611,9 +611,9 @@ contract("FishingMaster", ([alice, bob, carol, dick, eva, dev, treasury, minter]
           (
             await this.chef.getUnlockSlotLevelRequirement(1, { from: eva })
           ).valueOf(),
-          "21"
+          "20"
         );
-      } else if (level == 21) {
+      } else if (level == 20) {
         let cost = BigNumber.from(
           (await this.chef.getUnlockSlotExp(1, { from: eva })).toString()
         );
@@ -623,7 +623,7 @@ contract("FishingMaster", ([alice, bob, carol, dick, eva, dev, treasury, minter]
           (await this.chef.getInvSlotNum(eva, { from: eva })).valueOf(),
           "2"
         );
-      } else if (level == 30) {
+      } else if (level == 29) {
         await expectRevert(
           this.chef.unlockItemSlot({ from: eva }),
           "No enough level."
@@ -632,9 +632,9 @@ contract("FishingMaster", ([alice, bob, carol, dick, eva, dev, treasury, minter]
           (
             await this.chef.getUnlockSlotLevelRequirement(2, { from: eva })
           ).valueOf(),
-          "31"
+          "30"
         );
-      } else if (level == 31) {
+      } else if (level == 30) {
         let cost = BigNumber.from(
           (await this.chef.getUnlockSlotExp(2, { from: eva })).toString()
         );
@@ -644,7 +644,7 @@ contract("FishingMaster", ([alice, bob, carol, dick, eva, dev, treasury, minter]
           (await this.chef.getInvSlotNum(eva, { from: eva })).valueOf(),
           "3"
         );
-      } else if (level == 40) {
+      } else if (level == 39) {
         await expectRevert(
           this.chef.unlockItemSlot({ from: eva }),
           "No enough level."
@@ -653,9 +653,9 @@ contract("FishingMaster", ([alice, bob, carol, dick, eva, dev, treasury, minter]
           (
             await this.chef.getUnlockSlotLevelRequirement(3, { from: eva })
           ).valueOf(),
-          "41"
+          "40"
         );
-      } else if (level == 41) {
+      } else if (level == 40) {
         let cost = BigNumber.from(
           (await this.chef.getUnlockSlotExp(3, { from: eva })).toString()
         );
@@ -665,7 +665,7 @@ contract("FishingMaster", ([alice, bob, carol, dick, eva, dev, treasury, minter]
           (await this.chef.getInvSlotNum(eva, { from: eva })).valueOf(),
           "4"
         );
-      } else if (level == 50) {
+      } else if (level == 49) {
         await expectRevert(
           this.chef.unlockItemSlot({ from: eva }),
           "No enough level."
@@ -674,9 +674,9 @@ contract("FishingMaster", ([alice, bob, carol, dick, eva, dev, treasury, minter]
           (
             await this.chef.getUnlockSlotLevelRequirement(4, { from: eva })
           ).valueOf(),
-          "51"
+          "50"
         );
-      } else if (level == 51) {
+      } else if (level == 50) {
         let cost = BigNumber.from(
           (await this.chef.getUnlockSlotExp(4, { from: eva })).toString()
         );
@@ -686,7 +686,7 @@ contract("FishingMaster", ([alice, bob, carol, dick, eva, dev, treasury, minter]
           (await this.chef.getInvSlotNum(eva, { from: eva })).valueOf(),
           "5"
         );
-      } else if (level == 60) {
+      } else if (level == 59) {
         await expectRevert(
           this.chef.unlockItemSlot({ from: eva }),
           "No enough level."
@@ -695,9 +695,9 @@ contract("FishingMaster", ([alice, bob, carol, dick, eva, dev, treasury, minter]
           (
             await this.chef.getUnlockSlotLevelRequirement(5, { from: eva })
           ).valueOf(),
-          "61"
+          "60"
         );
-      } else if (level == 61) {
+      } else if (level == 60) {
         let cost = BigNumber.from(
           (await this.chef.getUnlockSlotExp(5, { from: eva })).toString()
         );
