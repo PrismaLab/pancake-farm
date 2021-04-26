@@ -30,6 +30,7 @@ contract FishingMaster is Ownable {
         uint256 rewardDebt; // Reward debt. See explanation below.
         uint256 lastDropBlock; // Last block when a item drop check is rolled.
         uint256 lastDepositTime; // Timestamp of last deposit.
+        uint256 depositToGuild; // Guild deopsit.
         // Calculation algorithm is ispired by PancakeSwap, so we kept the name accCakePerShare :)
         // From pancake: We do some fancy math here. Basically, any point in time, the amount of Tokens
         // entitled to a user but is pending to be distributed is:
@@ -52,6 +53,9 @@ contract FishingMaster is Ownable {
         uint256 guildDeposit; // Guild system balance count.
         uint256 depositToGuild; // Balance contribute to guild.
         uint256 customizeInfo; // User customization info (avatar etc.).
+        uint256 cachedItemExpBonus; // Cached Item bonus.
+        uint256 cachedItemMainBonus; // Cached Item bonus.
+        uint256 cachedItemMFBonus; // Cached Item bonus.
     }
 
     // Info of each pool.
@@ -62,10 +66,11 @@ contract FishingMaster is Ownable {
         uint256 lastRewardBlock; // Last block number that tokens distribution occurs.
         uint256 accCakePerShare; // Accumulated tokens per share, times 1e12. See below.
         uint256 totalWeightedValue; // Total weighted balance of the pool.
+        uint256 guildWeight; // Total weighted balance of the pool.
     }
 
     // Item info, maybe it should belongs to the ItemNFT implementation, but we put it here to have more centralized control.
-    struct itemDetail {
+    struct ItemDetail {
         uint256 level; // Item level as well as the level requirement.
         bool isRandom; // Whether it is random. A random master piece will be a true wonder.
         uint256 template; // Item template for displaying and/or other uses.
@@ -125,7 +130,7 @@ contract FishingMaster is Ownable {
     uint256 public UPGRADE_NFT_PRICE = 0;
 
     // Item details: tokenId => details.
-    mapping(uint256 => itemDetail) public itemDetails;
+    mapping(uint256 => ItemDetail) public itemDetails;
     // User profiles.
     mapping(address => UserProfileInfo) public userProfileInfo;
     // Info of each user that stakes LP tokens.
@@ -252,7 +257,7 @@ contract FishingMaster is Ownable {
         uint256[6] calldata _attr
     ) external onlyOwner {
         uint256 newToken = itemToken.mintNft(recv);
-        itemDetail storage detail = itemDetails[newToken];
+        ItemDetail storage detail = itemDetails[newToken];
         detail.template = _template;
         detail.isRandom = false;
         detail.level = _level;
@@ -264,7 +269,7 @@ contract FishingMaster is Ownable {
     // Equip an item to a slot.
     function equipNFT(uint256 _slot, uint256 _tokenId) external {
         UserProfileInfo storage userProfile = userProfileInfo[msg.sender];
-        itemDetail storage detail = itemDetails[_tokenId];
+        ItemDetail storage detail = itemDetails[_tokenId];
         require(_slot < userProfile.invSlotNum && _slot < 6, "invalid slot");
 
         if (_tokenId == 0) {
@@ -280,6 +285,8 @@ contract FishingMaster is Ownable {
             }
         }
         userProfile.invSlot[_slot] = _tokenId;
+
+        cacheItemBonus(msg.sender);
     }
 
     // User pay exp to levelup.
@@ -367,7 +374,7 @@ contract FishingMaster is Ownable {
             require(userProfile.invSlot[i] != tokenId, "Item in use!");
         }
 
-        itemDetail storage detail = itemDetails[tokenId];
+        ItemDetail storage detail = itemDetails[tokenId];
         require(index < 6, "index out of range!");
         require(detail.attr[index] != 0, "No existing attr!");
 
@@ -439,8 +446,8 @@ contract FishingMaster is Ownable {
     }
 
     // Query NFT attributes.
-    function getNFTInfo(uint256 _tokenId) external view returns (itemDetail memory) {
-        itemDetail storage detail = itemDetails[_tokenId];
+    function getNFTInfo(uint256 _tokenId) external view returns (ItemDetail memory) {
+        ItemDetail storage detail = itemDetails[_tokenId];
         return detail;
     }
 
@@ -504,7 +511,8 @@ contract FishingMaster is Ownable {
                 allocPoint: _allocPoint,
                 lastRewardBlock: lastRewardBlock,
                 accCakePerShare: 0,
-                totalWeightedValue: 0
+                totalWeightedValue: 0,
+                guildWeight: 0
             })
         );
     }
@@ -530,6 +538,13 @@ contract FishingMaster is Ownable {
                 totalAllocPointMainToken = totalAllocPointMainToken.sub(prevAllocPoint).add(_allocPoint);
             }
         }
+    }
+
+    // Update guild weight.
+    function setGuildWeight(uint256 _pid, uint256 _guildWeight) public onlyOwner {
+        require(_pid < poolInfo.length, "invalid pid");
+        PoolInfo storage pool = poolInfo[_pid];
+        pool.guildWeight = _guildWeight;
     }
 
     // Update reward variables for all pools. Be careful of gas spending!
@@ -607,7 +622,7 @@ contract FishingMaster is Ownable {
         }
 
         // Guild
-        guildDeposit(_amount);
+        refreshGuildDeposit(_pid);
 
         emit Deposit(msg.sender, _pid, _amount);
 
@@ -658,7 +673,7 @@ contract FishingMaster is Ownable {
         user.rewardDebt = user.amount.mul(pool.accCakePerShare).div(1e12);
 
         // Guild
-        guildWithdraw(_amount);
+        refreshGuildDeposit(_pid);
 
         emit Withdraw(msg.sender, _pid, _amount);
         // NFT
@@ -790,19 +805,26 @@ contract FishingMaster is Ownable {
         return bonus;
     }
 
-    // Calculate bonus from level and items. Returns percentage.
-    function calculateWeightBonus(uint256 _pid, address _user) public view returns (uint256) {
+    // Calculate item bonus. In percentage.
+    function calculateItemBonus(uint256 _pid, address _user) public view returns (uint256) {
         require(_pid < poolInfo.length, "invalid pid");
         UserProfileInfo storage userProfile = userProfileInfo[_user];
         PoolInfo storage pool = poolInfo[_pid];
-
-        uint256 itemBonus = 100;
-        uint256 guildBonus = 100;
+        uint256 itemBonus = 0;
+        if (pool.isExpToken) {
+            if (userProfile.cachedItemExpBonus != 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF) {
+                return userProfile.cachedItemExpBonus;
+            }
+        } else {
+            if (userProfile.cachedItemMainBonus != 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF) {
+                return userProfile.cachedItemMainBonus;
+            }
+        }
 
         if (userProfile.invSlotNum <= 6) {
             for (uint8 i = 0; i < userProfile.invSlotNum; i++) {
                 if (userProfile.invSlot[i] > 0 && itemToken.ownerOf(userProfile.invSlot[i]) == _user) {
-                    itemDetail storage detail = itemDetails[userProfile.invSlot[i]];
+                    ItemDetail storage detail = itemDetails[userProfile.invSlot[i]];
                     if (detail.level > userProfile.level) {
                         continue;
                     }
@@ -824,7 +846,20 @@ contract FishingMaster is Ownable {
                 }
             }
         }
+        return itemBonus;
+    }
 
+    // Calculate bonus from level and items. Returns percentage.
+    function calculateWeightBonus(uint256 _pid, address _user) public view returns (uint256) {
+        require(_pid < poolInfo.length, "invalid pid");
+        UserProfileInfo storage userProfile = userProfileInfo[_user];
+        PoolInfo storage pool = poolInfo[_pid];
+
+        uint256 itemBonus = uint256(100).add(calculateItemBonus(_pid, _user));
+        
+        uint256 guildBonus = 100;
+
+        // TODO: check if this is the case!!!
         if (pool.isExpToken) {
             guildBonus = guildBonus.add(getGuildBonus(_user));
         }
@@ -837,10 +872,14 @@ contract FishingMaster is Ownable {
         UserProfileInfo storage userProfile = userProfileInfo[_user];
         uint256 itemBonus = 0;
 
+        if (userProfile.cachedItemMFBonus != 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF) {
+            return userProfile.cachedItemMFBonus;
+        }
+
         if (userProfile.invSlotNum <= 6) {
             for (uint8 i = 0; i < userProfile.invSlotNum; i++) {
                 if (userProfile.invSlot[i] > 0 && itemToken.ownerOf(userProfile.invSlot[i]) == _user) {
-                    itemDetail storage detail = itemDetails[userProfile.invSlot[i]];
+                    ItemDetail storage detail = itemDetails[userProfile.invSlot[i]];
                     if (detail.level > userProfile.level) {
                         continue;
                     }
@@ -893,26 +932,58 @@ contract FishingMaster is Ownable {
         }
     }
 
-    function guildDeposit(uint256 amount) internal {
+    function refreshGuildDeposit(uint256 _pid) internal {
+        require(_pid < poolInfo.length, "invalid pid");
+        PoolInfo storage pool = poolInfo[_pid];
+        UserInfo storage user = userInfo[_pid][msg.sender];
         UserProfileInfo storage userProfile = userProfileInfo[msg.sender];
-        userProfile.depositToGuild = userProfile.depositToGuild.add(amount);
-        if (userProfile.guildMaster == address(0)) {
-            return;
+
+        uint256 newDeposit = user.amount.mul(pool.guildWeight);
+        userProfile.depositToGuild = userProfile.depositToGuild.sub(user.depositToGuild).add(newDeposit);
+
+        if (userProfile.guildMaster != address(0)) {
+            UserProfileInfo storage gmProfile = userProfileInfo[userProfile.guildMaster];
+            // change user deposit count even if the master dismissed the guild.
+            gmProfile.guildDeposit = gmProfile.guildDeposit.sub(user.depositToGuild).add(newDeposit);
         }
-        UserProfileInfo storage gmProfile = userProfileInfo[userProfile.guildMaster];
-        // change user deposit count even if the master dismissed the guild.
-        gmProfile.guildDeposit = gmProfile.guildDeposit.add(amount);
+
+        user.depositToGuild = newDeposit;
     }
 
-    function guildWithdraw(uint256 amount) internal {
-        UserProfileInfo storage userProfile = userProfileInfo[msg.sender];
-        userProfile.depositToGuild = userProfile.depositToGuild.sub(amount);
-        if (userProfile.guildMaster == address(0)) {
-            return;
+    // Calculate item bonus. In percentage.
+    function cacheItemBonus(address _user) internal {
+        UserProfileInfo storage userProfile = userProfileInfo[_user];
+
+        userProfile.cachedItemExpBonus = 0;
+        userProfile.cachedItemMainBonus = 0;
+        userProfile.cachedItemMFBonus = 0;
+
+        if (userProfile.invSlotNum <= 6) {
+            for (uint8 i = 0; i < userProfile.invSlotNum; i++) {
+                if (userProfile.invSlot[i] > 0 && itemToken.ownerOf(userProfile.invSlot[i]) == _user) {
+                    ItemDetail storage detail = itemDetails[userProfile.invSlot[i]];
+                    if (detail.level > userProfile.level) {
+                        continue;
+                    }
+
+                    (uint256 exp, uint256 main, uint256 mf) = cacheBonus(userProfile.level, detail.attr);
+                    if (
+                        exp == 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF ||
+                        main == 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF ||
+                        mf == 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF
+                    ) {
+                        userProfile.cachedItemExpBonus = 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF;
+                        userProfile.cachedItemMainBonus = 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF;
+                        userProfile.cachedItemMFBonus = 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF;
+                        return;
+                    } else {
+                        userProfile.cachedItemExpBonus = userProfile.cachedItemExpBonus.add(exp);
+                        userProfile.cachedItemMainBonus = userProfile.cachedItemMainBonus.add(main);
+                        userProfile.cachedItemMFBonus = userProfile.cachedItemMFBonus.add(mf);
+                    }
+                }
+            }
         }
-        UserProfileInfo storage gmProfile = userProfileInfo[userProfile.guildMaster];
-        // change user deposit count even if the master dismissed the guild.
-        gmProfile.guildDeposit = gmProfile.guildDeposit.sub(amount);
     }
 
     // Internal functions that are view
@@ -979,6 +1050,18 @@ contract FishingMaster is Ownable {
         return itemHelper.getExpTokenBonus(attr, level, pid);
     }
 
+    function cacheBonus(uint256 level, uint256[6] memory itemAttr)
+        internal
+        view
+        returns (
+            uint256,
+            uint256,
+            uint256
+        )
+    {
+        return itemHelper.cacheBonus(level, itemAttr);
+    }
+
     // Decode attr and check if it has main token bonus to given pool.
     function getMainTokenBonus(
         uint256 attr,
@@ -1029,7 +1112,7 @@ contract FishingMaster is Ownable {
     // Generate a random NFT with a given random seed.
     function genRandomNFT(address recv, uint256 userLevel) private returns (uint256) {
         uint256 newToken = itemToken.mintNft(recv);
-        itemDetail storage detail = itemDetails[newToken];
+        ItemDetail storage detail = itemDetails[newToken];
 
         emit MintNFT(recv, newToken);
 
@@ -1075,7 +1158,7 @@ contract FishingMaster is Ownable {
     // Random mod _mod using helper functions
     function rand(uint256 _mod, address _user) private returns (uint256) {
         // Helper will do sanity check.
-        return itemHelper.rand(_mod, _user);
+        return itemHelper.randMod(_mod, _user);
     }
 
     // Random in [lower, upper] using helper functions
@@ -1085,6 +1168,6 @@ contract FishingMaster is Ownable {
         address _user
     ) private returns (uint256) {
         // Helper will do sanity check.
-        return itemHelper.rand(_lower, _upper, _user);
+        return itemHelper.randRange(_lower, _upper, _user);
     }
 }

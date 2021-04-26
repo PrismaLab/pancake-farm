@@ -71,7 +71,7 @@ contract ItemHelper {
         )
     {
         // Pure random function version 0
-        uint256 template = rand(10, _sender);
+        uint256 template = randMod(10, _sender);
         // We do not plan to change the level logic so we leave it here.
         uint256 minLevel = 0;
         if (userLevel > 10) {
@@ -79,13 +79,13 @@ contract ItemHelper {
         }
         uint256 maxLevel = userLevel.add(10);
 
-        uint256 level = rand(minLevel, maxLevel, _sender);
+        uint256 level = randRange(minLevel, maxLevel, _sender);
         level = level - (level % 5) + 5;
         uint256[6] memory attr;
         // genAttr actually will ask itemHelper to generate attributes.
         for (uint256 i = 0; i < 6; i++) {
             attr[i] = genAttr(level, _sender);
-            if (rand(256, _sender) >= 2) {
+            if (randMod(256, _sender) >= 2) {
                 break;
             }
         }
@@ -127,6 +127,26 @@ contract ItemHelper {
         return (attr | (attr_v << 32));
     }
 
+    function cacheBonus(uint256 level, uint256[6] memory itemAttr)
+        public
+        pure
+        returns (
+            uint256 expBonus,
+            uint256 mainBonus,
+            uint256 mfBonus
+        )
+    {
+        // TODO: return uint256(-1) if it is pid related so that it cannot be cached.
+        for (uint8 j = 0; j < 6; j++) {
+            if (itemAttr[j] == 0) {
+                break;
+            }
+            expBonus = expBonus.add(getExpTokenBonus(itemAttr[j], level, 0));
+            mainBonus = mainBonus.add(getExpTokenBonus(itemAttr[j], level, 0));
+            mfBonus = mfBonus.add(getExpTokenBonus(itemAttr[j], level, 0));
+        }
+    }
+
     // Defining a function
     //
     // We choose not to use an oracle for randomness in the NFT case for the following reasons:
@@ -141,19 +161,19 @@ contract ItemHelper {
 
     // Defining a function to generate
     // a random number mod modulus
-    function rand(uint256 _modulus, address _sender) public returns (uint256) {
+    function randMod(uint256 _modulus, address _sender) public returns (uint256) {
         require(_modulus > 0, "rand: mod 0");
         return rand(_sender) % _modulus;
     }
 
     // Defining a function to generate
     // a random number in [lower, upper]
-    function rand(
+    function randRange(
         uint256 lower,
         uint256 upper,
         address _sender
     ) public returns (uint256) {
         require(lower <= upper, "rand: lower bound must less or equal to upper bound");
-        return rand(upper - lower + 1, _sender) + lower;
+        return randMod(upper - lower + 1, _sender) + lower;
     }
 }
