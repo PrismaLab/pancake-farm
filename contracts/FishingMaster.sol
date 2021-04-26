@@ -414,7 +414,7 @@ contract FishingMaster is Ownable {
             uint256 cakeReward = calculateReward(pool.isExpToken, pool.allocPoint, pool.lastRewardBlock);
             accCakePerShare = accCakePerShare.add(cakeReward.mul(1e12).div(lpSupply));
         }
-        return user.amount.mul(accCakePerShare).div(1e12).sub(user.rewardDebt);
+        return user.weight.mul(accCakePerShare).div(1e12).sub(user.rewardDebt);
     }
 
     // Query pool size.
