@@ -1,32 +1,40 @@
+const {ethers} = require("ethers");
 const YAYAToken = artifacts.require('YAYAToken');
 const PAPAToken = artifacts.require('PAPAToken');
 const ItemNFT = artifacts.require('ItemNFT');
 const FishingMaster = artifacts.require('FishingMaster');
 const ItemHelper = artifacts.require('ItemHelper');
+const MockBEP20 = artifacts.require("testlibs/MockBEP20");
+const Multicall = artifacts.require("utils/Multicall");
 
 module.exports = function(deployer) {
 
     deployer.then(async () => {
-        let devaddr = '0xA3e82C289f0887E5Ad7a65E4B794AB726e9CbFe8';
-        let initNum = ethers.utils.formatEther("1000");
-        let yayaNum = ethers.utils.formatEther("1000000000000");
+        let devaddr = '0x71E30416eF2D40daC33b649596a0e18E46225576';
+        let initNum = ethers.utils.parseEther("1000");
+        let yayaNum = ethers.utils.parseEther("100000000000");
 
         let yaya = await deployer.deploy(YAYAToken);
         await yaya.mint(devaddr,yayaNum);
 
-        let papa = await deployer.deploy(PAPAToken, (10**18).toString);
+        let papa = await deployer.deploy(PAPAToken, '100000000000000000000000000');
         await papa.mint(devaddr,initNum);
 
         let nft = await deployer.deploy(ItemNFT);
         let nftHelper = await deployer.deploy(ItemHelper);
-        let master = await deployer.deploy(FishingMaster, yaya.address, papa.address, nft.address, nftHelper.address, devaddr, '40', '40','10');
+        let master = await deployer.deploy(FishingMaster, yaya.address, papa.address, nft.address, nftHelper.address, devaddr, '40', '40','9');
 
         let lp1 = await MockBEP20.new("LPToken1", "LP1", initNum);
         let lp2 = await MockBEP20.new("LPToken2", "LP2", initNum);
 
-        await yaya.transferOwnership(master);
-        await papa.transferOwnership(master);
-        await nft.transferOwnership(master);
+        let multicall = await deployer.deploy(Multicall);
+
+        await master.add("1000", lp1.address, true, true);
+        await master.add("2000", lp2.address, true, true);
+
+        await yaya.transferOwnership(master.address);
+        await papa.transferOwnership(master.address);
+        await nft.transferOwnership(master.address);
 
         await master.mintRandomNFT(devaddr);
         await master.mintRandomNFT(devaddr);
@@ -42,6 +50,7 @@ module.exports = function(deployer) {
         console.log("master",master.address);
         console.log("lp1",lp1.address);
         console.log("lp2",lp2.address);
+        console.log("multicall",multicall.address);
     });
     
 };
