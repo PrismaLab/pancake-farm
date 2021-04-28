@@ -30,7 +30,6 @@ contract FishingMaster is Ownable {
         uint256 rewardDebt; // Reward debt. See explanation below.
         uint256 lastDropBlock; // Last block when a item drop check is rolled.
         uint256 lastDepositTime; // Timestamp of last deposit.
-        uint256 depositToGuild; // Guild deopsit.
         // Calculation algorithm is ispired by PancakeSwap, so we kept the name accCakePerShare :)
         // From pancake: We do some fancy math here. Basically, any point in time, the amount of Tokens
         // entitled to a user but is pending to be distributed is:
@@ -49,9 +48,6 @@ contract FishingMaster is Ownable {
         uint256 level; // Level.
         uint256[6] invSlot; // Inventory slot.
         uint256 invSlotNum; // Max slot number.
-        address guildMaster; // Guild system leader.
-        uint256 guildDeposit; // Guild system balance count.
-        uint256 depositToGuild; // Balance contribute to guild.
         uint256 customizeInfo; // User customization info (avatar etc.).
         uint256 cachedItemExpBonus; // Cached Item bonus.
         uint256 cachedItemMainBonus; // Cached Item bonus.
@@ -66,7 +62,6 @@ contract FishingMaster is Ownable {
         uint256 lastRewardBlock; // Last block number that tokens distribution occurs.
         uint256 accCakePerShare; // Accumulated tokens per share, times 1e12. See below.
         uint256 totalWeightedValue; // Total weighted balance of the pool.
-        uint256 guildWeight; // Total weighted balance of the pool.
     }
 
     // Item info, maybe it should belongs to the ItemNFT implementation,
@@ -93,6 +88,10 @@ contract FishingMaster is Ownable {
     IMigratorMaster public migrator;
     // Dev address.
     address public devaddr;
+    // Reserve address.
+    address public reserve_addr;
+    // Community address.
+    address public community_addr;
     // Treasury address.
     // We need this to seperate tokens belongs to community and to the contract itself.
     address public treasury_addr;
@@ -156,6 +155,8 @@ contract FishingMaster is Ownable {
         ItemNFT _itemToken,
         ItemHelper _itemHelper,
         address _devaddr,
+        address _reserve_addr,
+        address _community_addr,
         uint256 _expTokenPerBlock,
         uint256 _mainTokenPerBlock,
         uint256 _startBlock
@@ -165,6 +166,8 @@ contract FishingMaster is Ownable {
         itemToken = _itemToken;
         itemHelper = _itemHelper;
         devaddr = _devaddr;
+        reserve_addr = _reserve_addr;
+        community_addr = _community_addr;
         expTokenPerBlock = _expTokenPerBlock;
         mainTokenPerBlock = _mainTokenPerBlock;
         startBlock = _startBlock;
@@ -228,6 +231,16 @@ contract FishingMaster is Ownable {
     function dev(address _devaddr) external {
         require(msg.sender == devaddr, "dev: wut?");
         devaddr = _devaddr;
+    }
+
+    // Update reserve address by the owner.
+    function reserve(address _reserve_addr) external onlyOwner {
+        reserve_addr = _reserve_addr;
+    }
+
+    // Update community address by the owner.
+    function community(address _community_addr) external onlyOwner {
+        community_addr = _community_addr;
     }
 
     // Update treasury address by the owner.
@@ -512,8 +525,7 @@ contract FishingMaster is Ownable {
                 allocPoint: _allocPoint,
                 lastRewardBlock: lastRewardBlock,
                 accCakePerShare: 0,
-                totalWeightedValue: 0,
-                guildWeight: 0
+                totalWeightedValue: 0
             })
         );
     }
@@ -539,13 +551,6 @@ contract FishingMaster is Ownable {
                 totalAllocPointMainToken = totalAllocPointMainToken.sub(prevAllocPoint).add(_allocPoint);
             }
         }
-    }
-
-    // Update guild weight.
-    function setGuildWeight(uint256 _pid, uint256 _guildWeight) public onlyOwner {
-        require(_pid < poolInfo.length, "invalid pid");
-        PoolInfo storage pool = poolInfo[_pid];
-        pool.guildWeight = _guildWeight;
     }
 
     // Update reward variables for all pools. Be careful of gas spending!
@@ -580,6 +585,8 @@ contract FishingMaster is Ownable {
             // Main token has a far more restricted eco model, so no mint for dev.
             // mainToken.mint(devaddr, cakeReward.div(10));
             mainToken.mint(address(this), cakeReward);
+            mainToken.mint(reserve_addr, cakeReward.mul(30).div(45)); // 30% to reserve
+            mainToken.mint(community_addr, cakeReward.mul(25).div(45)); // 25% to community
         }
 
         pool.accCakePerShare = pool.accCakePerShare.add(cakeReward.mul(1e12).div(lpSupply));
@@ -621,9 +628,6 @@ contract FishingMaster is Ownable {
         if (newDeposit) {
             user.lastDepositTime = block.timestamp;
         }
-
-        // Guild
-        refreshGuildDeposit(_pid);
 
         emit Deposit(msg.sender, _pid, _amount);
 
@@ -673,9 +677,6 @@ contract FishingMaster is Ownable {
 
         user.rewardDebt = user.amount.mul(pool.accCakePerShare).div(1e12);
 
-        // Guild
-        refreshGuildDeposit(_pid);
-
         emit Withdraw(msg.sender, _pid, _amount);
         // NFT
         if (existingDeposit) {
@@ -693,26 +694,6 @@ contract FishingMaster is Ownable {
         emit EmergencyWithdraw(msg.sender, _pid, user.amount);
         user.amount = 0;
         user.rewardDebt = 0;
-    }
-
-    function joinGuild(address guildMaster) public {
-        UserProfileInfo storage userProfile = userProfileInfo[msg.sender];
-        require(userProfile.guildMaster == address(0), "Already in another guild");
-        UserProfileInfo storage gmProfile = userProfileInfo[guildMaster];
-        if (guildMaster != msg.sender) {
-            require(guildMaster == gmProfile.guildMaster, "guild not exit");
-        }
-        userProfile.guildMaster = guildMaster;
-        gmProfile.guildDeposit = gmProfile.guildDeposit.add(userProfile.depositToGuild);
-    }
-
-    function leaveGuild() public {
-        UserProfileInfo storage userProfile = userProfileInfo[msg.sender];
-        require(userProfile.guildMaster != address(0), "not in guild");
-        UserProfileInfo storage gmProfile = userProfileInfo[userProfile.guildMaster];
-        // Do not check if guild is dismissed.
-        gmProfile.guildDeposit = gmProfile.guildDeposit.sub(userProfile.depositToGuild);
-        userProfile.guildMaster = address(0);
     }
 
     // Public functions that are view
@@ -781,31 +762,6 @@ contract FishingMaster is Ownable {
         return _currentLevel.mul(50).sub(30).mul(10**expToken.decimals());
     }
 
-    // Get Exp comsumption for level up.
-    function getGuildBonus(address _user) public view returns (uint256) {
-        UserProfileInfo storage userProfile = userProfileInfo[_user];
-        // Not in any guild
-        if (userProfile.guildMaster == address(0)) {
-            return 0;
-        }
-        UserProfileInfo storage gmProfile = userProfileInfo[userProfile.guildMaster];
-        if (gmProfile.guildMaster != userProfile.guildMaster) {
-            // GM already leave the guild.
-            return 0;
-        }
-        uint256 bonus = 0;
-        // TODO: Change this number!
-        if (gmProfile.guildDeposit > 1000000) {
-            bonus = 20;
-        } else if (gmProfile.guildDeposit > 100000) {
-            bonus = 10;
-        }
-        if (bonus > 0 && userProfile.guildMaster == _user) {
-            bonus = bonus + 5;
-        }
-        return bonus;
-    }
-
     // Calculate item bonus. In percentage.
     function calculateItemBonus(uint256 _pid, address _user) public view returns (uint256) {
         require(_pid < poolInfo.length, "invalid pid");
@@ -854,18 +810,10 @@ contract FishingMaster is Ownable {
     function calculateWeightBonus(uint256 _pid, address _user) public view returns (uint256) {
         require(_pid < poolInfo.length, "invalid pid");
         UserProfileInfo storage userProfile = userProfileInfo[_user];
-        PoolInfo storage pool = poolInfo[_pid];
 
         uint256 itemBonus = uint256(100).add(calculateItemBonus(_pid, _user));
 
-        uint256 guildBonus = 100;
-
-        // TODO: check if this is the case!!!
-        if (pool.isExpToken) {
-            guildBonus = guildBonus.add(getGuildBonus(_user));
-        }
-
-        return levelToBonus(userProfile.level).add(100).mul(itemBonus).mul(guildBonus).div(10000).sub(100);
+        return levelToBonus(userProfile.level).add(100).mul(itemBonus).div(100).sub(100);
     }
 
     // Get MF bonus
@@ -931,24 +879,6 @@ contract FishingMaster is Ownable {
         } else {
             mainToken.transfer(_to, _amount);
         }
-    }
-
-    function refreshGuildDeposit(uint256 _pid) internal {
-        require(_pid < poolInfo.length, "invalid pid");
-        PoolInfo storage pool = poolInfo[_pid];
-        UserInfo storage user = userInfo[_pid][msg.sender];
-        UserProfileInfo storage userProfile = userProfileInfo[msg.sender];
-
-        uint256 newDeposit = user.amount.mul(pool.guildWeight);
-        userProfile.depositToGuild = userProfile.depositToGuild.sub(user.depositToGuild).add(newDeposit);
-
-        if (userProfile.guildMaster != address(0)) {
-            UserProfileInfo storage gmProfile = userProfileInfo[userProfile.guildMaster];
-            // change user deposit count even if the master dismissed the guild.
-            gmProfile.guildDeposit = gmProfile.guildDeposit.sub(user.depositToGuild).add(newDeposit);
-        }
-
-        user.depositToGuild = newDeposit;
     }
 
     // Calculate item bonus. In percentage.

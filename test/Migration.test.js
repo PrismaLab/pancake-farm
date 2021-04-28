@@ -11,7 +11,7 @@ const MockBEP20 = artifacts.require("testlibs/MockBEP20");
 const MockItemHelper = artifacts.require("testlibs/MockItemHelper");
 const MockIMigrator = artifacts.require("testlibs/MockIMigrator");
 
-contract("Migration", ([alice, bob, carol, dev, minter]) => {
+contract("Migration", ([alice, bob, carol, dev,reserve,community, minter]) => {
   beforeEach(async () => {
     this.ppx = await YAYAToken.new({ from: minter });
     this.ppy = await PAPAToken.new("1000000000000000000000000000", {
@@ -35,6 +35,8 @@ contract("Migration", ([alice, bob, carol, dev, minter]) => {
       this.ppe.address,
       this.itemHelper.address,
       dev,
+      reserve,
+      community,
       "1000",
       "1000",
       "100",

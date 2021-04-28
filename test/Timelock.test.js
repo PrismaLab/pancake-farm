@@ -13,7 +13,7 @@ function encodeParameters(types, values) {
   return abi.encode(types, values);
 }
 
-contract("Timelock", ([alice, bob, carol, dev, minter]) => {
+contract("Timelock", ([alice, bob, carol, dev, community, reserve, minter]) => {
   beforeEach(async () => {
     this.ppy = await PAPAToken.new("1000000000000000000000000000", {
       from: alice,
@@ -95,6 +95,8 @@ contract("Timelock", ([alice, bob, carol, dev, minter]) => {
       this.ppe.address,
       this.itemHelper.address,
       dev,
+      reserve,
+      community,
       "1000",
       "1000",
       "0",

@@ -13,7 +13,9 @@ module.exports = function (deployer, network) {
     await web3.eth.getAccounts(function(err,res) { accounts = res; });
     var owner = accounts[0]; // first account
 
-    let devaddr = owner;
+    let devaddr = owner; // change it!
+    let reserve_addr = owner; // change it!
+    let community_addr = owner; // change it!
 
     let yayaPerblock = "100";
     let papaPerblock = "100";
@@ -32,12 +34,14 @@ module.exports = function (deployer, network) {
       nft.address,
       nftHelper.address,
       devaddr,
+      reserve_addr,
+      community_addr,
       yayaPerblock,
       papaPerblock,
       startBlock
     );
 
-    if (network != "bsc") {
+    if (network != "bsc" && network != "test") {
       await yaya.mint(devaddr, ethers.utils.parseEther("100000000000"));
       await papa.mint(devaddr, ethers.utils.parseEther("1000"));
     }
@@ -48,7 +52,7 @@ module.exports = function (deployer, network) {
     await papa.transferOwnership(master.address);
     await nft.transferOwnership(master.address);
 
-    if (network != "bsc") {
+    if (network != "bsc" && network != "test") {
       // For test environment
       await master.mintRandomNFT(devaddr);
       await master.mintRandomNFT(devaddr);
