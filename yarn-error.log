@@ -1,0 +1,65 @@
+Arguments: 
+  /usr/local/Cellar/node/12.6.0/bin/node /usr/local/bin/yarn add @truffle/hdwallet-provider --sav-dev
+
+PATH: 
+  /Users/n-m-bj-033/.cargo/bin:/usr/local/opt/llvm/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/Library/TeX/texbin:/usr/local/go/bin:/usr/local/share/dotnet:/opt/X11/bin:~/.dotnet/tools:/Library/Apple/usr/bin:/Users/n-m-bj-033/.cargo/bin:/usr/local/opt/llvm/bin
+
+Yarn version: 
+  1.22.10
+
+Node version: 
+  12.6.0
+
+Platform: 
+  darwin x64
+
+Trace: 
+  Error: https://github.com/Digital-MOB-Filecoin/filecoin-signing-tools-js: ETIMEDOUT
+      at Timeout._onTimeout (/usr/local/lib/node_modules/yarn/lib/cli.js:141322:19)
+      at listOnTimeout (internal/timers.js:531:17)
+      at processTimers (internal/timers.js:475:7)
+
+npm manifest: 
+  {
+    "name": "papaya-swap-farm",
+    "version": "1.0.0",
+    "main": "index.js",
+    "scripts": {
+      "migrate": "truffle migrate",
+      "compile": "truffle compile",
+      "test": "truffle test",
+      "coverage": "truffle run coverage"
+    },
+    "dependencies": {
+      "@openzeppelin/contracts": "^4.0.0",
+      "@openzeppelin/test-helpers": "^0.5.10",
+      "ether": "0.0.9",
+      "truffle": "^5.1.58",
+      "truffle-flattener": "^1.4.4"
+    },
+    "devDependencies": {
+      "chai": "^4.2.0",
+      "ethereum-waffle": "^3.0.0",
+      "ethers": "^5.1.2",
+      "solidity-coverage": "^0.7.16",
+      "truffle-hdwallet-provider": "^1.0.17",
+      "truffle-plugin-verify": "^0.5.7",
+      "web3": "^1.3.0"
+    },
+    "prettier": {
+      "overrides": [
+          {
+            "files": "*.sol",
+            "options": {
+              "printWidth": 120
+            }
+          }
+        ]
+    }
+  }
+
+yarn manifest: 
+  No manifest
+
+Lockfile: 
+  No lockfile
